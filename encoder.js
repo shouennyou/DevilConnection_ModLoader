@@ -138,43 +138,64 @@ ENCRYPT_BLACKLIST=.env$
 /**
  * 解析目标目录下的 .env 配置文件
  * @param {string} pluginPath 插件所在目录路径
+ * @returns {Promise<{exists: boolean, whitelist: RegExp[], blacklist: RegExp[], privateKey: string|null}>}
  */
 async function parseEnv(pluginPath) {
-	const config = {
-		exists: false,
-		whitelist: [],
-		blacklist: [],
-		privateKey: null
-	};
-	const envPath = path.join(pluginPath, '.env');
+    // 警告消息模板
+    const WARN_INVALID_REGEX = (type, pattern, errMsg) => 
+        `${colors.yellow}[警告] 无效的${type}正则表达式: "${pattern}" - ${errMsg}${colors.reset}`;
 
-	if (!fs.existsSync(envPath)) return config;
+    const config = {
+        exists: false,
+        whitelist: [],
+        blacklist: [],
+        privateKey: null
+    };
+    const envPath = path.join(pluginPath, '.env');
 
-	config.exists = true;
-	const content = await fsPromises.readFile(envPath, 'utf8');
-	content.split(/\r?\n/).forEach(line => {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith('#')) return;
+    if (!fs.existsSync(envPath)) return config;
 
-		const index = trimmed.indexOf('=');
-		if (index === -1) return;
+    config.exists = true;
+    const content = await fsPromises.readFile(envPath, 'utf8');
+    
+    content.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
 
-		const key = trimmed.substring(0, index).trim();
-		const val = trimmed.substring(index + 1).trim();
+        const index = trimmed.indexOf('=');
+        if (index === -1) return;
 
-		// 处理白名单和黑名单正则
-		if (key === 'ENCRYPT_WHITELIST' && val) {
-			config.whitelist = val.split(',').map(p => new RegExp(p.trim(), 'i'));
-		}
-		if (key === 'ENCRYPT_BLACKLIST' && val) {
-			config.blacklist = val.split(',').map(p => new RegExp(p.trim(), 'i'));
-		}
-		// 处理并还原伪装私钥
-		if (key === 'PRIVATE_KEY_B64' && val) {
-			config.privateKey = deobfuscateKey(val);
-		}
-	});
-	return config;
+        const key = trimmed.substring(0, index).trim();
+        const val = trimmed.substring(index + 1).trim();
+
+        // 解析正则列表的辅助函数
+        const parseRegexList = (val, type) => {
+            const patterns = val.split(',').map(p => p.trim()).filter(p => p !== '');
+            const valid = [];
+            for (const p of patterns) {
+                try {
+                    valid.push(new RegExp(p, 'i'));
+                } catch (err) {
+                    console.warn(WARN_INVALID_REGEX(type, p, err.message));
+                }
+            }
+            return valid;
+        };
+
+        if (key === 'ENCRYPT_WHITELIST' && val) {
+            config.whitelist = parseRegexList(val, '白名单');
+        }
+        
+        if (key === 'ENCRYPT_BLACKLIST' && val) {
+            config.blacklist = parseRegexList(val, '黑名单');
+        }
+        
+        if (key === 'PRIVATE_KEY_B64' && val) {
+            config.privateKey = deobfuscateKey(val);
+        }
+    });
+    
+    return config;
 }
 
 /**
