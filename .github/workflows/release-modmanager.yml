@@ -1,0 +1,59 @@
+name: Release Mod Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mod loader
+        uses: actions/checkout@v7
+
+      - name: Check out mod manager
+        uses: actions/checkout@v7
+        with:
+          repository: shouennyou/DevilConnection_ModManager
+          path: DevilConnection_ModManager
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: DevilConnection_ModManager/package-lock.json
+
+      - name: Install mod manager dependencies
+        working-directory: DevilConnection_ModManager
+        run: npm install
+
+      - name: Build mod manager
+        working-directory: DevilConnection_ModManager
+        run: npm run build
+
+      - name: Add mod manager to app
+        run: |
+          mv DevilConnection_ModManager/dist app/modmanager
+
+      - name: Install asar
+        run: npm install --global asar
+
+      - name: Package app
+        run: >-
+          asar pack app app.asar
+          --unpack "**/node_modules/steamworks.js/**/*.{node,dll,so,dylib}"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          generate_release_notes: true
+          files: app.asar

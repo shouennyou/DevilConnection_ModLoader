@@ -1,0 +1,60 @@
+{
+  "name": "devil-connection",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "electron .",
+    "app:dir": "electron-builder --dir",
+    "app:dist": "electron-builder"
+  },
+  "build": {
+    "appId": "testproject",
+    "productName": "ティラノスクリプト",
+    "copyright": "",
+    "win": {
+      "target": "nsis",
+      "icon": ""
+    },
+    "extraResources": [
+      "./node_modules/@electron/remote/**"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "author": "",
+  "license": "ISC",
+  "homepage": "",
+  "devDependencies": {
+    "electron": "^22.0.0"
+  },
+  "dependencies": {
+    "@electron/asar": "^4.2.0",
+    "@electron/remote": "^2.0.9",
+    "adm-zip": "^0.5.9",
+    "fs-extra": "^11.1.0",
+    "steamworks.js": "^0.4.0"
+  },
+  "extraResources": [
+    "./node_modules/@electron/remote/**"
+  ],
+  "window": {
+    "title": "DevilConnection",
+    "icon": "link.png",
+    "toolbar": false,
+    "frame": true,
+    "width": 1280,
+    "height": 960,
+    "position": "mouse",
+    "min_width": 640,
+    "min_height": 480
+  },
+  "webkit": {
+    "plugin": true
+  }
+}
