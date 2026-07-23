@@ -8,6 +8,10 @@
 
 项目提供 Steam 模式, 用于同时兼容 Steam 版与 DLsite 版游戏.
 
+## 开发文档
+
+- [模组文件 API 文档](MODLOADER_API.md): `window.api.modloader` 的调用方法、返回数据格式和使用示例.
+
 ## 主要功能
 
 - 模组管理: 安装 `.asar` 模组, 启用或禁用, 拖拽排序, 重命名, 卸载, 查看大小和元数据.
