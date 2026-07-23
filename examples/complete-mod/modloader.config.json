@@ -1,0 +1,59 @@
+{
+  "title": "完整示例模组配置",
+  "description": "此文件展示当前管理器支持的全部配置字段类型。",
+  "fields": [
+    {
+      "key": "enabled",
+      "type": "toggle",
+      "label": "启用扩展功能",
+      "default": true,
+      "help": "关闭后模组保留加载, 但主功能不会执行。"
+    },
+    {
+      "key": "displayName",
+      "type": "text",
+      "label": "显示名称",
+      "default": "示例名称",
+      "placeholder": "输入显示名称",
+      "help": "用于游戏内界面显示。",
+      "required": true
+    },
+    {
+      "key": "accessToken",
+      "type": "password",
+      "label": "访问令牌",
+      "default": "",
+      "placeholder": "可选的访问令牌",
+      "help": "保存后显示为密码输入框。"
+    },
+    {
+      "key": "retryCount",
+      "type": "number",
+      "label": "重试次数",
+      "default": 3,
+      "placeholder": "3",
+      "help": "必须是有效数字。"
+    },
+    {
+      "key": "theme",
+      "type": "select",
+      "label": "界面主题",
+      "default": "auto",
+      "help": "从预定义选项中选择主题。",
+      "options": [
+        {
+          "label": "跟随游戏",
+          "value": "auto"
+        },
+        {
+          "label": "浅色",
+          "value": "light"
+        },
+        {
+          "label": "深色",
+          "value": "dark"
+        }
+      ]
+    }
+  ]
+}

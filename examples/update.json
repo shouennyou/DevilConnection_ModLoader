@@ -1,0 +1,24 @@
+[
+  {
+    "id": "example-complete-mod",
+    "name": "完整示例模组",
+    "author": [
+      "示例作者"
+    ],
+    "description": "完整示例模组的更新记录。",
+    "version": "1.1.0",
+    "asarUrl": "https://example.com/devil-connection/releases/example-complete-mod-1.1.0.asar",
+    "changelog": "https://example.com/devil-connection/releases/example-complete-mod-1.1.0"
+  },
+  {
+    "id": "example-companion-mod",
+    "name": "示例配套模组",
+    "author": [
+      "示例作者"
+    ],
+    "description": "与完整示例共用 update.json 的另一条记录。",
+    "version": "2.0.0",
+    "asarUrl": "https://example.com/devil-connection/releases/example-companion-mod-2.0.0.asar",
+    "changelog": "修复兼容性问题。"
+  }
+]

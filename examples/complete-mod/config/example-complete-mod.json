@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "displayName": "示例名称",
+  "accessToken": "",
+  "retryCount": 3,
+  "theme": "auto"
+}

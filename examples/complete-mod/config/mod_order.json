@@ -1,0 +1,12 @@
+[
+  {
+    "file": "example-complete-mod.asar",
+    "order": 1,
+    "enabled": true
+  },
+  {
+    "file": "example-companion-mod.asar",
+    "order": 2,
+    "enabled": false
+  }
+]
