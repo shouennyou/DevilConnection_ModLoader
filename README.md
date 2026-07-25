@@ -31,9 +31,12 @@ mods/
   example-complete-mod/
     modloader.mod.json
     modloader.config.json
-    scripts/
-      main.js
-      ui.js
+    assets/
+      id/
+	    icon.png
+        scripts/
+          main.js
+          ui.js
 ```
 
 完整可用示例位于 [examples/complete-mod](examples/complete-mod).
@@ -48,12 +51,24 @@ mods/
 | `name` | string | 管理器中显示的名称. |
 | `author` | string[] | 作者名称列表. |
 | `description` | string | 模组说明. |
+| `icon` | string | 可选的模组内图标相对路径. 图标会显示在管理器的模组卡片上. |
 | `version` | string | semver 版本, 例如 `1.2.3`. 依赖、冲突和更新比较使用该字段. |
-| `versionCode` | number | 可选的构建编号. 当前用于元数据透传, 不参与版本范围比较. |
 | `update` | object | 可选的更新源配置. 见下方更新说明. |
 | `depends` | object | 可选的前置依赖映射, 键为目标 ID, 值为 semver 范围. |
 | `breaks` | object | 可选的冲突映射, 键为目标 ID, 值为命中冲突的 semver 范围. |
 | `injections` | object[] | 可选的游戏窗口注入脚本列表. |
+
+### 模组图标
+
+`icon` 指向模组目录内的图片文件, 使用相对路径和正斜杠. 支持 `avif`、`bmp`、`gif`、`jpeg`、`jpg`、`png` 和 `webp`.
+
+```json
+{
+  "icon": "assets/id/icon.png"
+}
+```
+
+不支持外部 URL 或绝对路径, 路径中也不能包含 `.` 或 `..` 目录段. 图标文件缺失、路径无效或格式不受支持时, 管理器会忽略该图标而不会影响模组加载.
 
 ### 依赖与冲突
 
@@ -84,8 +99,8 @@ mods/
 ```json
 {
   "injections": [
-    { "name": "主逻辑", "path": "scripts/main.js" },
-    { "name": "界面逻辑", "path": "scripts/ui.js" }
+    { "name": "主逻辑", "path": "assets/id/scripts/main.js" },
+    { "name": "界面逻辑", "path": "assets/id/scripts/ui.js" }
   ]
 }
 ```
