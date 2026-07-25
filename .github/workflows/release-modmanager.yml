@@ -41,7 +41,7 @@ jobs:
 
       - name: Add mod manager to app
         run: |
-          mv DevilConnection_ModManager/dist app/modmanager
+          mv DevilConnection_ModManager/dist app/ui
 
       - name: Install asar
         run: npm install --global asar

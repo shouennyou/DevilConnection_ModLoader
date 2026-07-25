@@ -182,7 +182,7 @@ function createManagerWindow() {
 
 	ensureRemoteInitialized();
 	managerWindow = new BrowserWindow(createWindowOptions('preload-manager.js', MANAGER_WINDOW_SIZE, MANAGER_PARTITION));
-	managerWindow.loadURL(url('file', './modmanager/index.html'));
+	managerWindow.loadURL(url('file', './ui/index.html'));
 	managerWindow.removeMenu();
 	managerWindow.on('closed', () => {
 		managerWindow = null;
