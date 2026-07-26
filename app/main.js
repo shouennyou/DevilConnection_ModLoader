@@ -8,7 +8,7 @@ let modLoaderEntry = null;
 
 function loadModLoader(targetWindow) {
 	try {
-		modLoaderEntry ??= require('dc-modloader/ModLoader/index');
+		modLoaderEntry ??= require('devilconnection-modloader/ModLoader/index');
 		return modLoaderEntry.start(targetWindow);
 	} catch (e) {
 		console.error('[ModLoader] 加载失败:', e);
@@ -17,7 +17,7 @@ function loadModLoader(targetWindow) {
 }
 
 try {
-	const mainExtra = require('dc-modloader/extra/main');
+	const mainExtra = require('devilconnection-modloader/extra/main');
 	if (mainExtra && typeof mainExtra.initExtra === 'function') {
 		mainExtra.initExtra();
 	}

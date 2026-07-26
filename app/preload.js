@@ -6,13 +6,13 @@ const fs = require('fs')
 
 let modloader = {}
 try {
-	({ modloader } = require('dc-modloader/extra/preload'))
+	({ modloader } = require('devilconnection-modloader/extra/preload'))
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
 
 try {
-	require('dc-modloader/ModLoader/index');
+	require('devilconnection-modloader/ModLoader/index');
 } catch (e) {
 	console.error('[ModLoader] 加载失败:', e);
 }

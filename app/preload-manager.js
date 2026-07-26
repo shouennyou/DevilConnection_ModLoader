@@ -6,7 +6,7 @@ const fs = require('fs')
 
 let apiExtra = {}
 try {
-	apiExtra = require('dc-modloader/extra/preload')
+	apiExtra = require('devilconnection-modloader/extra/preload')
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
