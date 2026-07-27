@@ -1,11 +1,16 @@
 import { init } from 'steamworks.js';
+import { app } from 'electron';
+import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
+
+const require = createRequire(import.meta.url);
+const { getWritableDataPath } = require('devilconnection-modloader/utils/RuntimePaths');
 
 // 游戏在 Steam 平台的 AppID.
 const APP_ID = 3054820;
 
-// 配置文件: <resourcesPath>/config/mod-manager.json.
+// 配置文件: <dataPath>/config/mod-manager.json.
 const CONFIG_DIR = 'config';
 const CONFIG_FILE = 'mod-manager.json';
 const LEGACY_CONFIG_FILE = 'modloader.json';
@@ -14,7 +19,11 @@ const LEGACY_CONFIG_FILE = 'modloader.json';
 let client = null;
 
 function configPath(file = CONFIG_FILE) {
-	return path.join(process.resourcesPath, CONFIG_DIR, file);
+	return path.join(getConfigDataPath(), CONFIG_DIR, file);
+}
+
+function getConfigDataPath() {
+	return getWritableDataPath(process.resourcesPath, { app }, fs);
 }
 
 function readConfigFile(file) {
