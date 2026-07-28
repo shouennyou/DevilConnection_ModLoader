@@ -47,9 +47,9 @@ jobs:
           node -e '
             const fs = require("node:fs");
             const platforms = [
-              [process.env.BUILD_WINDOWS === "true", { platform: "Windows", os: "windows-latest", command: "app:win", artifact: "modmanager-windows", files: "release/*.exe\nrelease/*.exe.blockmap\nrelease/*.yml" }],
-              [process.env.BUILD_LINUX === "true", { platform: "Linux", os: "ubuntu-latest", command: "app:linux", artifact: "modmanager-linux", files: "release/*.AppImage\nrelease/*.AppImage.blockmap\nrelease/*.deb\nrelease/*.yml" }],
-              [process.env.BUILD_MACOS === "true", { platform: "macOS", os: "macos-latest", command: "app:mac", artifact: "modmanager-macos", files: "release/*.dmg\nrelease/*.dmg.blockmap\nrelease/*.yml" }],
+              [process.env.BUILD_WINDOWS === "true", { platform: "Windows", os: "windows-latest", command: "app:win", artifact: "modmanager-windows", files: "release/*.exe\nrelease/*.exe.blockmap\nrelease/latest.yml" }],
+              [process.env.BUILD_LINUX === "true", { platform: "Linux", os: "ubuntu-latest", command: "app:linux", artifact: "modmanager-linux", files: "release/*.AppImage\nrelease/*.AppImage.blockmap\nrelease/*.deb\nrelease/latest-linux*.yml" }],
+              [process.env.BUILD_MACOS === "true", { platform: "macOS", os: "macos-latest", command: "app:mac", artifact: "modmanager-macos", files: "release/*.dmg\nrelease/*.dmg.blockmap\nrelease/latest-mac.yml" }],
             ];
             const include = platforms.filter(([enabled]) => enabled).map(([, platform]) => platform);
             if (include.length === 0) throw new Error("Select at least one platform.");
@@ -143,14 +143,41 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Download packages
+      - name: Download Windows packages
+        if: ${{ inputs.build_windows }}
         uses: actions/download-artifact@v5
         with:
-          pattern: modmanager-*
-          path: release
-          merge-multiple: true
+          name: modmanager-windows
+          path: release/windows
 
-      - name: Publish packages
+      - name: Download Linux packages
+        if: ${{ inputs.build_linux }}
+        uses: actions/download-artifact@v5
+        with:
+          name: modmanager-linux
+          path: release/linux
+
+      - name: Download macOS packages
+        if: ${{ inputs.build_macos }}
+        uses: actions/download-artifact@v5
+        with:
+          name: modmanager-macos
+          path: release/macos
+
+      - name: Publish Windows packages
+        if: ${{ inputs.build_windows }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder publish --policy always --files release/*
+        run: npx electron-builder publish --policy always --files release/windows/*
+
+      - name: Publish Linux packages
+        if: ${{ inputs.build_linux }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder publish --policy always --files release/linux/*
+
+      - name: Publish macOS packages
+        if: ${{ inputs.build_macos }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder publish --policy always --files release/macos/*
