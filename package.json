@@ -9,6 +9,12 @@
     "appId": "com.shouennyou.devilconnection.modloader",
     "productName": "DevilConnection-ModLoader",
     "artifactName": "${productName}-${os}-${arch}-${version}.${ext}",
+    "publish": {
+      "provider": "github",
+      "owner": "shouennyou",
+      "repo": "DevilConnection_ModLoader",
+      "releaseType": "release"
+    },
     "asar": {
       "smartUnpack": false
     },
