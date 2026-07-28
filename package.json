@@ -8,6 +8,7 @@
   "build": {
     "appId": "com.shouennyou.devilconnection.modloader",
     "productName": "DevilConnection-ModLoader",
+    "artifactName": "${productName}-${os}-${arch}-${version}.${ext}",
     "asar": {
       "smartUnpack": false
     },
@@ -81,7 +82,6 @@
   },
   "scripts": {
     "start": "electron app",
-    "app:dist": "electron-builder",
     "app:dir": "electron-builder --dir",
     "app:win": "electron-builder --win",
     "app:mac": "electron-builder --mac",

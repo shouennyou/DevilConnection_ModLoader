@@ -7,17 +7,62 @@ on:
         description: Release tag to create
         required: true
         type: string
+      build_windows:
+        description: Build Windows package
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: Build Linux packages
+        required: false
+        default: false
+        type: boolean
+      build_macos:
+        description: Build macOS package
+        required: false
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-modmanager-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  select-platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Create build matrix
+        id: matrix
+        env:
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+          BUILD_LINUX: ${{ inputs.build_linux }}
+          BUILD_MACOS: ${{ inputs.build_macos }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const platforms = [
+              [process.env.BUILD_WINDOWS === "true", { platform: "Windows", os: "windows-latest", command: "app:win", artifact: "modmanager-windows", files: "release/DevilConnection-ModLoader Setup *.exe\nrelease/DevilConnection-ModLoader Setup *.exe.blockmap" }],
+              [process.env.BUILD_LINUX === "true", { platform: "Linux", os: "ubuntu-latest", command: "app:linux", artifact: "modmanager-linux", files: "release/*.AppImage\nrelease/*.AppImage.blockmap\nrelease/*.deb" }],
+              [process.env.BUILD_MACOS === "true", { platform: "macOS", os: "macos-latest", command: "app:mac", artifact: "modmanager-macos", files: "release/*.dmg\nrelease/*.dmg.blockmap" }],
+            ];
+            const include = platforms.filter(([enabled]) => enabled).map(([, platform]) => platform);
+            if (include.length === 0) throw new Error("Select at least one platform.");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
+          '
+
+  prepare-ui:
+    needs: select-platforms
     runs-on: ubuntu-latest
     steps:
-      - name: Check out mod loader
-        uses: actions/checkout@v7
-
       - name: Check out mod manager
         uses: actions/checkout@v7
         with:
@@ -39,21 +84,65 @@ jobs:
         working-directory: DevilConnection_ModManager
         run: npm run build
 
-      - name: Add mod manager to app
-        run: |
-          mv DevilConnection_ModManager/dist app/ui
+      - name: Upload mod manager UI
+        uses: actions/upload-artifact@v4
+        with:
+          name: modmanager-ui
+          path: DevilConnection_ModManager/dist
+          if-no-files-found: error
 
-      - name: Install asar
-        run: npm install --global asar
+  package:
+    needs: [select-platforms, prepare-ui]
+    name: Package ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select-platforms.outputs.matrix) }}
+
+    steps:
+      - name: Check out mod loader
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Download mod manager UI
+        uses: actions/download-artifact@v4
+        with:
+          name: modmanager-ui
+          path: app/ui
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Package app
-        run: >-
-          asar pack app app.asar
-          --unpack "**/node_modules/steamworks.js/**/*.{node,dll,so,dylib}"
+        run: npm run ${{ matrix.command }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: modmanager-*
+          path: release
+          merge-multiple: true
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
           generate_release_notes: true
-          files: app.asar
+          files: release/*

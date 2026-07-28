@@ -1,1 +1,5 @@
-app/modmanager
+app/ui
+
+node_modules
+
+release
