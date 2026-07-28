@@ -50,10 +50,6 @@ import {
 	writeFileSync
 } from 'fs';
 import {
-	initialize,
-	enable
-} from '@electron/remote/main/index.js';
-import {
 	safeStorage
 } from 'electron/main';
 import {
@@ -97,14 +93,7 @@ const MANAGER_WINDOW_SIZE = {
 
 let mainWindow = null;
 let managerWindow = null;
-let remoteInitialized = false;
 app.commandLine.appendSwitch('js-flags', '--expose-gc');
-
-function ensureRemoteInitialized() {
-	if (remoteInitialized) return;
-	initialize();
-	remoteInitialized = true;
-}
 
 const scSize = {
 	'width': 1280,
@@ -158,7 +147,6 @@ function createMainWindow() {
 		return mainWindow;
 	}
 
-	ensureRemoteInitialized();
 	mainWindow = new BrowserWindow(createWindowOptions('preload.js', MAIN_WINDOW_SIZE));
 	loadModLoader(mainWindow);
 	mainWindow.loadURL(url('file', './index.html'));
@@ -180,7 +168,6 @@ function createManagerWindow() {
 		return managerWindow;
 	}
 
-	ensureRemoteInitialized();
 	managerWindow = new BrowserWindow(createWindowOptions('preload-manager.js', MANAGER_WINDOW_SIZE, MANAGER_PARTITION));
 	managerWindow.loadURL(url('file', './ui/index.html'));
 	managerWindow.removeMenu();
@@ -195,8 +182,6 @@ app.on('ready', () => {
 });
 
 app.on('browser-window-created', (_event, window) => {
-	ensureRemoteInitialized();
-	enable(window.webContents);
 	window.webContents.on('before-input-event', (event, input) => {
 		if (window !== mainWindow || input.type !== 'keyDown' || input.key !== 'F8') return;
 		event.preventDefault();

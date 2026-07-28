@@ -1,0 +1,99 @@
+{
+  "name": "devilconnection-modloader-workspace",
+  "version": "1.6.0",
+  "private": true,
+  "workspaces": [
+    "app"
+  ],
+  "build": {
+    "appId": "com.shouennyou.devilconnection.modloader",
+    "productName": "DevilConnection-ModLoader",
+    "asar": {
+      "smartUnpack": false
+    },
+    "files": [
+      "**/*",
+      {
+        "from": "../packages/devilconnection-modloader",
+        "to": "node_modules/devilconnection-modloader",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/steamworks.js/**/*.{node,dll,so,dylib}"
+    ],
+    "directories": {
+      "app": "app",
+      "output": "release"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.games",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Game",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "scripts": {
+    "start": "electron app",
+    "app:dist": "electron-builder",
+    "app:dir": "electron-builder --dir",
+    "app:win": "electron-builder --win",
+    "app:mac": "electron-builder --mac",
+    "app:linux": "electron-builder --linux",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "devilconnection-modloader": "file:packages/devilconnection-modloader",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true
+  }
+}

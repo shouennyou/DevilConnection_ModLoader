@@ -1,60 +1,30 @@
 {
-  "name": "devil-connection",
-  "type": "module",
-  "version": "1.0.0",
-  "description": "",
-  "main": "main.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "electron .",
-    "app:dir": "electron-builder --dir",
-    "app:dist": "electron-builder"
-  },
-  "build": {
-    "appId": "testproject",
-    "productName": "ティラノスクリプト",
-    "copyright": "",
-    "win": {
-      "target": "nsis",
-      "icon": ""
-    },
-    "extraResources": [
-      "./node_modules/@electron/remote/**"
-    ],
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true
-    }
-  },
-  "author": "",
-  "license": "ISC",
-  "homepage": "",
-  "devDependencies": {
-    "electron": "^22.0.0"
-  },
-  "dependencies": {
-    "@electron/asar": "^4.2.0",
-    "@electron/remote": "^2.0.9",
-    "adm-zip": "^0.5.9",
-    "fs-extra": "^11.1.0",
-    "steamworks.js": "^0.4.0"
-  },
-  "extraResources": [
-    "./node_modules/@electron/remote/**"
+  "name": "devilconnection_modloader",
+  "version": "1.6.0",
+  "description": "恶魔连结模组加载器",
+  "keywords": [
+    "devil-connection",
+    "devilconnection"
   ],
-  "window": {
-    "title": "DevilConnection",
-    "icon": "link.png",
-    "toolbar": false,
-    "frame": true,
-    "width": 1280,
-    "height": 960,
-    "position": "mouse",
-    "min_width": 640,
-    "min_height": 480
+  "homepage": "https://github.com/shouennyou/DevilConnection_ModLoader#readme",
+  "bugs": {
+    "url": "https://github.com/shouennyou/DevilConnection_ModLoader/issues"
   },
-  "webkit": {
-    "plugin": true
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shouennyou/DevilConnection_ModLoader.git"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "逍婉瑶",
+    "email": "shouennyou@outlook.com"
+  },
+  "type": "module",
+  "main": "main.js",
+  "dependencies": {
+    "@electron/asar": "^4.2.1",
+    "adm-zip": "^0.6.0",
+    "fs-extra": "^11.4.0",
+    "steamworks.js": "^0.4.0"
   }
 }
