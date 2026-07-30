@@ -1,6 +1,6 @@
 {
   "name": "devilconnection-modloader-workspace",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": true,
   "workspaces": [
     "app"
