@@ -26,6 +26,32 @@ const {
 	zipFiles,
 	extractSavesFlat,
 } = require('./core');
+
+/**
+ * 规范化备份文件名. 备份仅允许位于 backups 根目录中的单层 ZIP 文件.
+ * @param {unknown} value
+ * @param {{ appendExtension?: boolean }} [options]
+ * @returns {string|null}
+ */
+function normalizeBackupFileName(value, options = {}) {
+	if (typeof value !== 'string') return null;
+	let fileName = value.trim();
+	if (!fileName || fileName.includes('\0')) return null;
+	if (path.isAbsolute(fileName)
+		|| fileName !== path.basename(fileName)
+		|| fileName.includes('/')
+		|| fileName.includes('\\')
+		|| fileName.includes(':')
+		|| fileName === '.'
+		|| fileName === '..') {
+		return null;
+	}
+	if (options.appendExtension && !fileName.toLowerCase().endsWith('.zip')) {
+		fileName += '.zip';
+	}
+	return fileName.toLowerCase().endsWith('.zip') ? fileName : null;
+}
+
 const ModManagerApi = {
 	resourcesPath: Env.getResourcesPath(),
 	dataPath: Env.getDataPath(),
@@ -1062,9 +1088,13 @@ const ModManagerApi = {
 		return path.join(this.dataPath, BACKUP_DIR);
 	},
 
-	/** 拼接备份文件绝对路径, 不执行校验. */
+	/** 返回经校验的 backups 根目录内 ZIP 文件路径. */
 	getBackupFilePath(file) {
-		return path.join(this.getBackupDir(), file || '');
+		const fileName = normalizeBackupFileName(file);
+		if (!fileName) return null;
+		const backupDir = path.resolve(this.getBackupDir());
+		const backupPath = path.resolve(backupDir, fileName);
+		return path.dirname(backupPath) === backupDir ? backupPath : null;
 	},
 
 	/** 读取备份锁定状态表. */
@@ -1101,7 +1131,7 @@ const ModManagerApi = {
 		if (!originalFs.existsSync(backupDir)) return [];
 		const locks = this.readBackupLocks();
 		return originalFs.readdirSync(backupDir)
-			.filter(n => n.toLowerCase().endsWith('.zip'))
+			.filter(n => normalizeBackupFileName(n) === n)
 			.map(n => {
 				let time = 0;
 				let size = 0;
@@ -1147,9 +1177,10 @@ const ModManagerApi = {
 				originalFs.mkdirSync(backupDir, { recursive: true });
 			}
 
-			let fileName = (name && String(name).trim()) || `backup_${Date.now()}`;
-			if (!fileName.toLowerCase().endsWith('.zip')) fileName += '.zip';
-			const zipPath = path.join(backupDir, fileName);
+			const requestedName = (name && String(name).trim()) || `backup_${Date.now()}`;
+			const fileName = normalizeBackupFileName(requestedName, { appendExtension: true });
+			const zipPath = this.getBackupFilePath(fileName);
+			if (!zipPath) return { success: false, message: '无效的备份文件名' };
 			if (originalFs.existsSync(zipPath)) {
 				return { success: false, message: '同名备份已存在' };
 			}
@@ -1168,49 +1199,92 @@ const ModManagerApi = {
 
 	/**
 	 * 恢复备份.
-	 * 先解压至临时目录并验证存档, 成功后再清空 _storage 并写入.
+	 * 先将新存档完整写入临时目录并验证, 成功后通过目录切换提交.
+	 * 切换后任一步失败都会恢复原 _storage.
 	 * 自动跳过 steam_autocloud.vdf, 防止与 Steam 云存档冲突.
 	 * @param {string} file
 	 * @returns {{ success: boolean, count?: number, message?: string }}
 	 */
 	restoreBackup(file) {
 		const zipPath = this.getBackupFilePath(file);
-		if (!file || !originalFs.existsSync(zipPath)) {
+		if (!zipPath || !originalFs.existsSync(zipPath)) {
 			return { success: false, message: '备份不存在' };
 		}
 		const storageDir = this.getStorageDir();
 		const stagingDir = path.join(this.getBackupDir(), `.restore-staging-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+		const restoredSavesDir = path.join(stagingDir, 'restored');
+		const nextStorageDir = path.join(stagingDir, 'next');
+		const previousStorageDir = path.join(stagingDir, 'previous');
+		let storageWasMoved = false;
+		let newStorageActivated = false;
 		try {
-			// 确认备份有效后, 才清理当前存档.
-			extractSavesFlat(zipPath, stagingDir);
-			const stagedFiles = originalFs.readdirSync(stagingDir).filter(name => {
-				const fullPath = path.join(stagingDir, name);
+			// 先解压并验证备份, 此阶段不会修改当前存档.
+			extractSavesFlat(zipPath, restoredSavesDir);
+			const stagedFiles = originalFs.readdirSync(restoredSavesDir).filter(name => {
+				const fullPath = path.join(restoredSavesDir, name);
 				return name.toLowerCase().endsWith(SAV_EXT) && originalFs.statSync(fullPath).isFile();
 			});
 			if (stagedFiles.length === 0) {
 				throw new Error('备份中没有可恢复的存档(.sav)');
 			}
 
-			// 确保 _storage 存在且为空.
-			if (originalFs.existsSync(storageDir)) {
-				for (const name of originalFs.readdirSync(storageDir)) {
-					originalFs.rmSync(path.join(storageDir, name), { recursive: true, force: true });
-				}
-			} else {
-				originalFs.mkdirSync(storageDir, { recursive: true });
-			}
+			// 先将新存档完整写入并校验到独立临时目录, 当前存档仍保持原状.
+			originalFs.mkdirSync(nextStorageDir, { recursive: true });
 			for (const name of stagedFiles) {
-				originalFs.copyFileSync(path.join(stagingDir, name), path.join(storageDir, name));
+				const sourcePath = path.join(restoredSavesDir, name);
+				const targetPath = path.join(nextStorageDir, name);
+				originalFs.copyFileSync(sourcePath, targetPath);
+				if (originalFs.statSync(sourcePath).size !== originalFs.statSync(targetPath).size) {
+					throw new Error(`存档临时复制校验失败: ${name}`);
+				}
 			}
+
+			// 新数据已就绪, 通过同卷目录重命名切换. 失败时将 previous 原样移回.
+			if (originalFs.existsSync(storageDir)) {
+				if (!originalFs.statSync(storageDir).isDirectory()) {
+					throw new Error('存档路径不是文件夹');
+				}
+				originalFs.renameSync(storageDir, previousStorageDir);
+				storageWasMoved = true;
+			}
+			originalFs.renameSync(nextStorageDir, storageDir);
+			newStorageActivated = true;
 			const count = stagedFiles.length;
 			Logger.info(`恢复备份成功: ${file} (${count} 个文件)`);
 			return { success: true, count };
 		} catch (error) {
+			let rollbackError = null;
+			if (newStorageActivated && originalFs.existsSync(storageDir)) {
+				try {
+					originalFs.rmSync(storageDir, { recursive: true, force: true });
+				} catch (cleanupError) {
+					rollbackError = cleanupError;
+					Logger.error('清理未完成的恢复目录失败', cleanupError);
+				}
+			}
+			if (!rollbackError && storageWasMoved && originalFs.existsSync(previousStorageDir)) {
+				try {
+					originalFs.renameSync(previousStorageDir, storageDir);
+					storageWasMoved = false;
+				} catch (restoreError) {
+					rollbackError = restoreError;
+					Logger.error('恢复原存档目录失败', restoreError);
+				}
+			}
 			Logger.error('恢复备份失败', error);
-			return { success: false, message: error.message };
+			return {
+				success: false,
+				message: rollbackError
+					? `${error.message}; 原存档回滚失败: ${rollbackError.message}`
+					: error.message
+			};
 		} finally {
 			if (originalFs.existsSync(stagingDir)) {
-				originalFs.rmSync(stagingDir, { recursive: true, force: true });
+				try {
+					originalFs.rmSync(stagingDir, { recursive: true, force: true });
+				} catch (cleanupError) {
+					Logger.error(`清理恢复临时目录失败: ${stagingDir}`, cleanupError);
+				}
 			}
 		}
 	},
@@ -1221,10 +1295,12 @@ const ModManagerApi = {
 	 * @returns {{ success: boolean, message?: string }}
 	 */
 	deleteBackup(file) {
+		const fileName = normalizeBackupFileName(file);
+		if (!fileName) return { success: false, message: '无效的备份文件名' };
 		const locks = this.readBackupLocks();
-		if (locks[file]) return { success: false, message: '备份已锁定,请先解锁' };
-		const zipPath = this.getBackupFilePath(file);
-		if (!file || !originalFs.existsSync(zipPath)) {
+		if (locks[fileName]) return { success: false, message: '备份已锁定,请先解锁' };
+		const zipPath = this.getBackupFilePath(fileName);
+		if (!zipPath || !originalFs.existsSync(zipPath)) {
 			return { success: false, message: '备份不存在' };
 		}
 		try {
@@ -1244,22 +1320,22 @@ const ModManagerApi = {
 	 * @returns {{ success: boolean, file?: string, message?: string }}
 	 */
 	renameBackup(oldName, newName) {
-		if (!oldName || !newName) return { success: false, message: '参数不完整' };
-		let finalName = String(newName).trim();
-		if (!finalName.toLowerCase().endsWith('.zip')) finalName += '.zip';
-		if (oldName === finalName) return { success: true, file: finalName };
+		const oldFileName = normalizeBackupFileName(oldName);
+		const finalName = normalizeBackupFileName(newName, { appendExtension: true });
+		if (!oldFileName || !finalName) return { success: false, message: '无效的备份文件名' };
+		if (oldFileName === finalName) return { success: true, file: finalName };
 
-		const oldPath = this.getBackupFilePath(oldName);
+		const oldPath = this.getBackupFilePath(oldFileName);
 		const newPath = this.getBackupFilePath(finalName);
-		if (!originalFs.existsSync(oldPath)) return { success: false, message: '备份不存在' };
+		if (!oldPath || !newPath || !originalFs.existsSync(oldPath)) return { success: false, message: '备份不存在' };
 		if (originalFs.existsSync(newPath)) return { success: false, message: '目标名已存在' };
 
 		try {
 			originalFs.renameSync(oldPath, newPath);
 			const locks = this.readBackupLocks();
-			if (locks[oldName]) {
+			if (locks[oldFileName]) {
 				locks[finalName] = true;
-				delete locks[oldName];
+				delete locks[oldFileName];
 				this.writeBackupLocks(locks);
 			}
 			Logger.info(`重命名备份成功: ${oldName} -> ${finalName}`);
@@ -1277,12 +1353,14 @@ const ModManagerApi = {
 	 * @returns {{ success: boolean, message?: string }}
 	 */
 	setBackupLock(file, locked) {
-		if (!file || !originalFs.existsSync(this.getBackupFilePath(file))) {
+		const fileName = normalizeBackupFileName(file);
+		const backupPath = this.getBackupFilePath(fileName);
+		if (!backupPath || !originalFs.existsSync(backupPath)) {
 			return { success: false, message: '备份不存在' };
 		}
 		const locks = this.readBackupLocks();
-		if (locked) locks[file] = true;
-		else delete locks[file];
+		if (locked) locks[fileName] = true;
+		else delete locks[fileName];
 		try {
 			this.writeBackupLocks(locks);
 			return { success: true };
@@ -1298,20 +1376,32 @@ const ModManagerApi = {
 	 * @returns {{ success: boolean, file?: string, message?: string }}
 	 */
 	importBackup(srcPath) {
-		if (!srcPath || !originalFs.existsSync(srcPath)) {
+		if (typeof srcPath !== 'string'
+			|| !srcPath
+			|| path.extname(srcPath).toLowerCase() !== '.zip'
+			|| !originalFs.existsSync(srcPath)) {
 			return { success: false, message: '文件不存在' };
+		}
+		try {
+			if (!originalFs.statSync(srcPath).isFile()) {
+				return { success: false, message: '请选择 ZIP 备份文件' };
+			}
+		} catch (error) {
+			return { success: false, message: '文件无法访问' };
 		}
 		const backupDir = this.getBackupDir();
 		if (!originalFs.existsSync(backupDir)) {
 			originalFs.mkdirSync(backupDir, { recursive: true });
 		}
-		let baseName = path.basename(srcPath);
-		if (!baseName.toLowerCase().endsWith('.zip')) baseName += '.zip';
-		let destPath = path.join(backupDir, baseName);
+		let baseName = normalizeBackupFileName(path.basename(srcPath));
+		if (!baseName) return { success: false, message: '无效的备份文件名' };
+		let destPath = this.getBackupFilePath(baseName);
+		if (!destPath) return { success: false, message: '无效的备份文件名' };
 		// 同名文件追加时间戳.
 		if (originalFs.existsSync(destPath)) {
-			baseName = `${baseName.replace(/\.zip$/i, '')}_${Date.now()}.zip`;
-			destPath = path.join(backupDir, baseName);
+			baseName = normalizeBackupFileName(`${baseName.replace(/\.zip$/i, '')}_${Date.now()}.zip`);
+			destPath = this.getBackupFilePath(baseName);
+			if (!baseName || !destPath) return { success: false, message: '无效的备份文件名' };
 		}
 		try {
 			originalFs.copyFileSync(srcPath, destPath);

@@ -380,7 +380,7 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('backup:export', async (event, file) => {
 		const srcPath = ModManagerApi.getBackupFilePath(file || '');
 		const fs = require('fs');
-		if (!file || !fs.existsSync(srcPath)) {
+		if (!srcPath || !fs.existsSync(srcPath)) {
 			return { success: false, message: '备份不存在' };
 		}
 		const { dialog, BrowserWindow } = require('electron');
