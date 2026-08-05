@@ -52,9 +52,9 @@ function writeConfig(cfg) {
 	fs.writeFileSync(p, JSON.stringify(cfg || {}, null, 2), 'utf-8');
 }
 
-/** Steam 是否启用. 仅明确设置 steam: false 时关闭. */
+/** Steam 是否启用. 仅明确设置 steam: true 时启用. */
 export function isSteamConfigured() {
-	return readConfig().steam !== false;
+	return readConfig()?.steam === true;
 }
 
 /** Steam 通讯是否处于活动状态. */

@@ -62,6 +62,7 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Game",
+      "syncDesktopName": true,
       "target": [
         {
           "target": "AppImage",
