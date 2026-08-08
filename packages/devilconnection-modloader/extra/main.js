@@ -33,16 +33,6 @@ function initExtra() {
 		}
 	});
 
-	// 在窗口内使用 F12 切换开发者工具.
-	app.on('browser-window-created', (event, win) => {
-		win.webContents.on('before-input-event', (e, input) => {
-			if (input.type === 'keyDown' && input.key === 'F12') {
-				win.webContents.toggleDevTools();
-				e.preventDefault();
-			}
-		});
-	});
-
 	ModManagerApi.init();
 }
 

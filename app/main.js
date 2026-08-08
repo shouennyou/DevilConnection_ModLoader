@@ -3,6 +3,7 @@ import {
 } from 'module';
 
 const require = createRequire(import.meta.url);
+const { getConfigDataPath } = require('devilconnection-modloader/utils/RuntimePaths');
 
 let modLoaderEntry = null;
 
@@ -100,6 +101,20 @@ const scSize = {
 	'height': 960
 };
 
+function isDebugModeEnabled() {
+	try {
+		const resourcesPath = path.normalize(process.resourcesPath || process.cwd());
+		const configPath = join(getConfigDataPath(resourcesPath), 'config', 'mod-manager.json');
+		const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+		return config?.debugMode === true;
+	} catch (error) {
+		if (error?.code !== 'ENOENT') {
+			console.error('[Debug] 读取 Debug 模式配置失败:', error);
+		}
+		return false;
+	}
+}
+
 async function triggerScreenshot(x, y, width, height) {
 	const screenshot = await mainWindow.capturePage({
 		'x': x,
@@ -150,6 +165,9 @@ function createMainWindow() {
 	mainWindow = new BrowserWindow(createWindowOptions('preload.js', MAIN_WINDOW_SIZE));
 	loadModLoader(mainWindow);
 	mainWindow.loadURL(url('file', './index.html'));
+	if (isDebugModeEnabled()) {
+		mainWindow.webContents.openDevTools();
+	}
 	mainWindow.removeMenu();
 	mainWindow.on('close', function() {
 		console.log('close');
