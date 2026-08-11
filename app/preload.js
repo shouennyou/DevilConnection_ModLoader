@@ -5,8 +5,9 @@ const {
 const fs = require('fs')
 
 let modloader = {}
+let modmanager = {}
 try {
-	({ modloader } = require('devilconnection-modloader/extra/preload'))
+	({ modloader, modmanager } = require('devilconnection-modloader/extra/preload'))
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
@@ -16,6 +17,10 @@ try {
 } catch (e) {
 	console.error('[ModLoader] 加载失败:', e);
 }
+
+// 新版顶层接口. window.api.modloader 继续保留给旧版游戏脚本使用.
+contextBridge.exposeInMainWorld('modloader', modloader)
+contextBridge.exposeInMainWorld('modmanager', modmanager)
 
 contextBridge.exposeInMainWorld('api', {
 	//process

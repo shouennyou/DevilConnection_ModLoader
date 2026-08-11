@@ -11,6 +11,14 @@ try {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
 
+// 新版顶层接口. window.api 中的同名入口暂时保留给旧版页面和模组使用.
+if (apiExtra.modloader) {
+	contextBridge.exposeInMainWorld('modloader', apiExtra.modloader)
+}
+if (apiExtra.modmanager) {
+	contextBridge.exposeInMainWorld('modmanager', apiExtra.modmanager)
+}
+
 contextBridge.exposeInMainWorld('api', {
 	//process
 	returnProcess: () => {
