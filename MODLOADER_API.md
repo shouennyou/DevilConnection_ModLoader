@@ -1,9 +1,9 @@
-# window.api.modloader 模组接口
+# window.modloader 模组接口
 
-本文件说明游戏窗口中提供给模组调用的 `window.api.modloader` 文件接口. 接口由 ModLoader preload 注入, 可在 `modloader.mod.json` 声明的注入脚本中使用.
+本文件说明游戏窗口中提供给模组调用的 `window.modloader` 文件接口. 接口由 ModLoader preload 注入, 可在 `modloader.mod.json` 声明的注入脚本中使用.
 
 ```js
-const modloader = window.api?.modloader
+const modloader = window.modloader
 
 if (!modloader) {
   throw new Error('ModLoader 文件接口不可用')
@@ -20,7 +20,7 @@ if (!modloader) {
 | --- | --- | --- |
 | `config/example-complete-mod.json` | `resources/config/example-complete-mod.json` | 模组持久化配置. |
 | `config/example-complete-mod/data.json` | `resources/config/example-complete-mod/data.json` | 模组私有数据目录. |
-| `../_storage/save.dat` | `resources` 同级的 `_storage/save.dat` | 游戏存档相关数据. |
+| `../_storage/save.sav` | `resources` 同级的 `_storage/save.sav` | 游戏存档相关数据. |
 
 - 不要使用绝对路径.
 - 路径不能包含 NUL 字符或越出允许根目录的 `..`.
@@ -41,7 +41,7 @@ interface FsResult {
 `success` 为 `false` 时, `error` 包含失败原因. 调用方应检查该字段:
 
 ```js
-const result = await window.api.modloader.writeFile(
+const result = await window.modloader.writeFile(
   'config/example-complete-mod.json',
   JSON.stringify({ enabled: true }, null, 2),
 )
@@ -67,7 +67,7 @@ if (!result.success) {
 读取和保存 JSON 配置示例:
 
 ```js
-const api = window.api.modloader
+const api = window.modloader
 const file = 'config/example-complete-mod.json'
 const content = await api.readFile(file)
 
@@ -99,7 +99,7 @@ if (!result.success) {
 | `writeBuffer(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `Promise<FsResult>` | 异步覆盖写入二进制文件. |
 
 ```js
-const api = window.api.modloader
+const api = window.modloader
 const response = await fetch('https://example.com/assets/icon.png')
 const buffer = await response.arrayBuffer()
 const result = await api.writeBuffer('config/example-complete-mod/icon.png', buffer)
@@ -146,7 +146,7 @@ interface FileStreamReadResult {
 流式复制示例:
 
 ```js
-const api = window.api.modloader
+const api = window.modloader
 const source = await api.createReadStream('config/example-complete-mod/source.bin')
 
 if (!source.success || !source.id) {
@@ -244,4 +244,4 @@ interface FileStat {
 - 大于数 MiB 的文件使用流式接口, 避免一次性占用大量渲染进程内存.
 - 删除和覆盖写入前先检查路径, `rmdir` 会递归删除整个目录.
 - 不要把会话 ID 保存到配置文件. 它只在当前游戏窗口存活期间有效.
-- 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.api?.modloader` 可能不存在, 调用前应进行存在性检查.
+- 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.modloader` 可能不存在, 调用前应进行存在性检查.

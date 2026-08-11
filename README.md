@@ -10,7 +10,7 @@
 
 ## 开发文档
 
-- [模组文件 API 文档](MODLOADER_API.md): `window.api.modloader` 的调用方法、返回数据格式和使用示例.
+- [模组文件 API 文档](MODLOADER_API.md): `window.modloader` 的调用方法、返回数据格式和使用示例.
 
 ## 主要功能
 
