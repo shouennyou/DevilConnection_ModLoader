@@ -63,7 +63,7 @@ const BUILTIN_HOOK_TITLE = `
 
 const BUILTIN_HOOK_WORKER = `
 	const OrigWorker = window.Worker;
-	if (!OrigWorker || !window.api?.modloader?.readFileSync) {
+	if (!OrigWorker || !window.modloader?.readFileSync) {
 		console.warn('[ModLoader] Worker 拦截功能初始化失败');
 		return;
 	}
@@ -87,7 +87,7 @@ const BUILTIN_HOOK_WORKER = `
 
 		try {
 			const filePath = resolveFilePath(new URL(rawUrl, location.href));
-			const code = window.api.modloader.readFileSync(filePath);
+			const code = window.modloader.readFileSync(filePath);
 			if (code == null) return new OrigWorker(url, options);
 			return new OrigWorker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })), options);
 		} catch (error) {
