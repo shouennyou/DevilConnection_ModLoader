@@ -19,6 +19,7 @@ const {
 	SAVE_IMPORT_DIR_KEY,
 	BACKUP_DIR,
 	BACKUP_LOCK_FILE,
+	LEGACY_BACKUP_LOCK_FILE,
 	STORAGE_DIR,
 	SAV_EXT,
 	Env,
@@ -66,6 +67,7 @@ const ModManagerApi = {
 		if (!originalFs.existsSync(configDir)) {
 			originalFs.mkdirSync(configDir, { recursive: true });
 		}
+		this.migrateBackupLocks();
 		this.ensureModOrder();
 	},
 
@@ -1097,9 +1099,43 @@ const ModManagerApi = {
 		return path.dirname(backupPath) === backupDir ? backupPath : null;
 	},
 
+	/** 返回备份锁定状态表的规范配置路径. */
+	getBackupLockPath() {
+		return path.join(this.dataPath, CONFIG_DIR, BACKUP_LOCK_FILE);
+	},
+
+	/** 返回旧版备份目录中的锁定状态表路径. */
+	getLegacyBackupLockPaths() {
+		const backupDir = this.getBackupDir();
+		return [
+			path.join(backupDir, BACKUP_LOCK_FILE),
+			path.join(backupDir, LEGACY_BACKUP_LOCK_FILE),
+		];
+	},
+
+	/**
+	 * 将旧版 backups 目录中的锁定状态表迁移到 config 目录.
+	 * 新路径已经存在时, 保留其内容作为当前配置.
+	 */
+	migrateBackupLocks() {
+		const lockFile = this.getBackupLockPath();
+		if (originalFs.existsSync(lockFile)) return;
+		const legacyLockFile = this.getLegacyBackupLockPaths()
+			.find(file => originalFs.existsSync(file));
+		if (!legacyLockFile) return;
+		try {
+			originalFs.mkdirSync(path.dirname(lockFile), { recursive: true });
+			originalFs.renameSync(legacyLockFile, lockFile);
+			Logger.info(`已迁移备份锁定状态表: ${legacyLockFile} -> ${lockFile}`);
+		} catch (error) {
+			Logger.error('迁移备份锁定状态表失败', error);
+		}
+	},
+
 	/** 读取备份锁定状态表. */
 	readBackupLocks() {
-		const lockFile = path.join(this.getBackupDir(), BACKUP_LOCK_FILE);
+		this.migrateBackupLocks();
+		const lockFile = this.getBackupLockPath();
 		if (!originalFs.existsSync(lockFile)) return {};
 		try {
 			return JSON.parse(originalFs.readFileSync(lockFile, 'utf-8'));
@@ -1111,12 +1147,13 @@ const ModManagerApi = {
 
 	/** 写入备份锁定状态表. */
 	writeBackupLocks(locks) {
-		const backupDir = this.getBackupDir();
-		if (!originalFs.existsSync(backupDir)) {
-			originalFs.mkdirSync(backupDir, { recursive: true });
+		const lockFile = this.getBackupLockPath();
+		const configDir = path.dirname(lockFile);
+		if (!originalFs.existsSync(configDir)) {
+			originalFs.mkdirSync(configDir, { recursive: true });
 		}
 		originalFs.writeFileSync(
-			path.join(backupDir, BACKUP_LOCK_FILE),
+			lockFile,
 			JSON.stringify(locks, null, 2),
 			'utf-8'
 		);
