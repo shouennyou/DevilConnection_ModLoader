@@ -279,6 +279,16 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModManagerApi.getCachedModConfigs();
 	});
 
+	// GetCachedWorkshop: 读取本地工坊目录缓存.
+	ipcMain.handle('modmanager:getCachedWorkshop', async () => {
+		return ModManagerApi.getCachedWorkshop();
+	});
+
+	// SetCachedWorkshop: 保存前端请求成功后得到的工坊目录.
+	ipcMain.handle('modmanager:setCachedWorkshop', async (event, catalog) => {
+		return ModManagerApi.setCachedWorkshop(catalog);
+	});
+
 	// SelectLocalModFile: 使用主进程原生文件对话框选择外部 ASAR 模组.
 	ipcMain.handle('modmanager:selectLocalModFile', async () => {
 		return ModManagerApi.selectLocalModFile();

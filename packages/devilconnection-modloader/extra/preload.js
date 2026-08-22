@@ -52,6 +52,16 @@ const modManagerAPI = {
 		return await ipcRenderer.invoke('modmanager:getCachedModConfigs');
 	},
 
+	/** 读取持久化的工坊目录缓存. */
+	getCachedWorkshop: async () => {
+		return await ipcRenderer.invoke('modmanager:getCachedWorkshop');
+	},
+
+	/** 保存最新工坊目录缓存. */
+	setCachedWorkshop: async (catalog) => {
+		return await ipcRenderer.invoke('modmanager:setCachedWorkshop', catalog);
+	},
+
 	/** 使用主进程原生文件对话框选择外部 ASAR 模组. */
 	selectLocalModFile: async () => {
 		return await ipcRenderer.invoke('modmanager:selectLocalModFile');

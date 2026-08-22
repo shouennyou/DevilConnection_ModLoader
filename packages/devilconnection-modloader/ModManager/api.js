@@ -16,6 +16,7 @@ const {
 	CACHE_DIR,
 	MOD_INFO_CACHE_FILE,
 	MOD_CONFIG_CACHE_FILE,
+	WORKSHOP_CACHE_FILE,
 	MOD_ORDER_FILE,
 	APP_CONFIG_FILE,
 	GAME_CORE_PATH_KEY,
@@ -137,6 +138,10 @@ const ModManagerApi = {
 
 	getModConfigCachePath() {
 		return path.join(this.getCacheDirPath(), MOD_CONFIG_CACHE_FILE);
+	},
+
+	getWorkshopCachePath() {
+		return path.join(this.getCacheDirPath(), WORKSHOP_CACHE_FILE);
 	},
 
 	/** 读取 JSON 缓存, 缓存缺失或损坏时返回 null. */
@@ -800,6 +805,28 @@ const ModManagerApi = {
 	/** 返回缓存的模组配置定义, 不触发重新扫描. */
 	getCachedModConfigs() {
 		return this.readCacheFile(this.getModConfigCachePath())?.entries ?? [];
+	},
+
+	/** 读取持久化的工坊目录缓存, 不发起网络请求. */
+	getCachedWorkshop() {
+		const cache = this.readCacheFile(this.getWorkshopCachePath());
+		return cache && Array.isArray(cache.items)
+			? { items: cache.items, unavailableCount: Number(cache.unavailableCount) || 0 }
+			: null;
+	},
+
+	/** 保存前端已解析的工坊目录缓存. */
+	setCachedWorkshop(catalog) {
+		if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog.items)) {
+			return { success: false, message: '工坊缓存格式无效' };
+		}
+		const result = this.writeCacheFile(this.getWorkshopCachePath(), {
+			schemaVersion: 1,
+			generatedAt: Date.now(),
+			items: catalog.items,
+			unavailableCount: Number(catalog.unavailableCount) || 0,
+		});
+		return result ? { success: true } : { success: false, message: '写入工坊缓存失败' };
 	},
 
 	/** 判断模组是否包含 modloader.config.json. */

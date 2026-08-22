@@ -24,6 +24,7 @@ const CONFIG_DIR = 'config';
 const CACHE_DIR = 'cache';
 const MOD_INFO_CACHE_FILE = 'mod-info.json';
 const MOD_CONFIG_CACHE_FILE = 'mod-config.json';
+const WORKSHOP_CACHE_FILE = 'workshop.json';
 const MOD_ORDER_FILE = 'mod_order.json';
 const APP_CONFIG_FILE = 'mod-manager.json';
 const GAME_CORE_PATH_KEY = 'gameCorePath';
@@ -144,6 +145,7 @@ module.exports = {
 	CACHE_DIR,
 	MOD_INFO_CACHE_FILE,
 	MOD_CONFIG_CACHE_FILE,
+	WORKSHOP_CACHE_FILE,
 	MOD_ORDER_FILE,
 	APP_CONFIG_FILE,
 	GAME_CORE_PATH_KEY,
