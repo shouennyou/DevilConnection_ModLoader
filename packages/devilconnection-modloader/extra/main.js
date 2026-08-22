@@ -264,6 +264,21 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModManagerApi.scanModInfos();
 	});
 
+	// RefreshModCaches: 重建 mod-info.json 和 mod-config.json 缓存.
+	ipcMain.handle('modmanager:refreshModCaches', async () => {
+		return ModManagerApi.refreshModCaches();
+	});
+
+	// GetCachedModInfos: 读取缓存的模组元信息, 不扫描模组文件.
+	ipcMain.handle('modmanager:getCachedModInfos', async () => {
+		return ModManagerApi.getCachedModInfos();
+	});
+
+	// GetCachedModConfigs: 读取缓存的模组配置定义, 不扫描模组文件.
+	ipcMain.handle('modmanager:getCachedModConfigs', async () => {
+		return ModManagerApi.getCachedModConfigs();
+	});
+
 	// SelectLocalModFile: 使用主进程原生文件对话框选择外部 ASAR 模组.
 	ipcMain.handle('modmanager:selectLocalModFile', async () => {
 		return ModManagerApi.selectLocalModFile();
@@ -278,6 +293,7 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		const result = await ModManagerApi.downloadAndReplace(url, fileName, (received, total) => {
 			event.sender.send('modmanager:download-progress', { fileName, received, total });
 		});
+		if (result.success) ModManagerApi.refreshModCaches();
 		event.sender.send('modmanager:download-progress', { fileName, received: -1, total: 0, result });
 	});
 

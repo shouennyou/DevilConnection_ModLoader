@@ -37,6 +37,21 @@ const modManagerAPI = {
 		return await ipcRenderer.invoke('modmanager:scanModInfos');
 	},
 
+	/** 重建 mod-info.json 和 mod-config.json 缓存. */
+	refreshModCaches: async () => {
+		return await ipcRenderer.invoke('modmanager:refreshModCaches');
+	},
+
+	/** 读取缓存的模组元信息, 不触发扫描. */
+	getCachedModInfos: async () => {
+		return await ipcRenderer.invoke('modmanager:getCachedModInfos');
+	},
+
+	/** 读取缓存的模组配置定义, 不触发扫描. */
+	getCachedModConfigs: async () => {
+		return await ipcRenderer.invoke('modmanager:getCachedModConfigs');
+	},
+
 	/** 使用主进程原生文件对话框选择外部 ASAR 模组. */
 	selectLocalModFile: async () => {
 		return await ipcRenderer.invoke('modmanager:selectLocalModFile');

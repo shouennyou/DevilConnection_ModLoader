@@ -13,6 +13,9 @@ const { ModLoaderApi, resolveResourcePath } = require('../ModLoader/api');
 const {
 	originalFs,
 	CONFIG_DIR,
+	CACHE_DIR,
+	MOD_INFO_CACHE_FILE,
+	MOD_CONFIG_CACHE_FILE,
 	MOD_ORDER_FILE,
 	APP_CONFIG_FILE,
 	GAME_CORE_PATH_KEY,
@@ -67,8 +70,18 @@ const ModManagerApi = {
 		if (!originalFs.existsSync(configDir)) {
 			originalFs.mkdirSync(configDir, { recursive: true });
 		}
+		const cacheDir = this.getCacheDirPath();
+		if (!originalFs.existsSync(cacheDir)) {
+			originalFs.mkdirSync(cacheDir, { recursive: true });
+		}
 		this.migrateBackupLocks();
 		this.ensureModOrder();
+		try {
+			this.refreshModCaches();
+		} catch (error) {
+			// 缓存失败不应阻止管理器和 ModLoader 启动.
+			Logger.error('初始化模组缓存失败', error);
+		}
 	},
 
 	/** 返回程序可写数据目录. */
@@ -111,6 +124,50 @@ const ModManagerApi = {
 	/** 返回包含界面设置及游戏核心路径的应用配置文件路径. */
 	getAppConfigPath() {
 		return path.join(this.dataPath, CONFIG_DIR, APP_CONFIG_FILE);
+	},
+
+	/** 返回模组缓存目录和缓存文件路径. */
+	getCacheDirPath() {
+		return path.join(this.dataPath, CACHE_DIR);
+	},
+
+	getModInfoCachePath() {
+		return path.join(this.getCacheDirPath(), MOD_INFO_CACHE_FILE);
+	},
+
+	getModConfigCachePath() {
+		return path.join(this.getCacheDirPath(), MOD_CONFIG_CACHE_FILE);
+	},
+
+	/** 读取 JSON 缓存, 缓存缺失或损坏时返回 null. */
+	readCacheFile(filePath) {
+		try {
+			if (!originalFs.existsSync(filePath)) return null;
+			const value = JSON.parse(originalFs.readFileSync(filePath, 'utf-8'));
+			return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+		} catch (error) {
+			Logger.error(`读取缓存失败: ${filePath}`, error);
+			return null;
+		}
+	},
+
+	/** 原子写入 JSON 缓存, 避免程序中断留下半份文件. */
+	writeCacheFile(filePath, value) {
+		const tempPath = `${filePath}.${randomUUID()}.tmp`;
+		try {
+			originalFs.mkdirSync(path.dirname(filePath), { recursive: true });
+			originalFs.writeFileSync(tempPath, JSON.stringify(value, null, 2), 'utf-8');
+			originalFs.renameSync(tempPath, filePath);
+			return true;
+		} catch (error) {
+			try {
+				if (originalFs.existsSync(tempPath)) originalFs.unlinkSync(tempPath);
+			} catch (cleanupError) {
+				Logger.error(`清理缓存临时文件失败: ${tempPath}`, cleanupError);
+			}
+			Logger.error(`写入缓存失败: ${filePath}`, error);
+			return false;
+		}
 	},
 
 	/** 读取应用配置. 配置缺失, 格式错误或根节点不是对象时返回空对象. */
@@ -265,6 +322,7 @@ const ModManagerApi = {
 			originalFs.renameSync(tempPath, targetPath);
 			tempPath = '';
 			AsarReader.uncacheAsar(targetPath);
+			this.refreshModCaches();
 			Logger.info(`导入本地模组成功: ${source.fileName}`);
 			return { success: true, fileName: source.fileName, size: source.size };
 		} catch (error) {
@@ -658,6 +716,92 @@ const ModManagerApi = {
 		return results;
 	},
 
+	/**
+	 * 启动时生成模组元信息和配置缓存.
+	 * mod-info.json 同时保存顺序与启用状态, mod-config.json 保存配置定义.
+	 */
+	refreshModCaches() {
+		let scanned;
+		try {
+			scanned = this.scanPlugins();
+		} catch (error) {
+			Logger.error('扫描模组缓存源失败', error);
+			return { success: false, infoCount: 0, configCount: 0 };
+		}
+		const infoEntries = [];
+		const configEntries = [];
+
+		for (const mod of scanned) {
+			let metadata = {};
+			try {
+				const raw = this.readFileSync(path.join('mods', mod.file, 'modloader.mod.json'));
+				if (raw) {
+					const json = JSON.parse(raw);
+					if (!json || typeof json !== 'object' || Array.isArray(json)) {
+						throw new Error('modloader.mod.json 必须是对象');
+					}
+					metadata = Object.fromEntries(Object.entries(json).filter(([key]) =>
+						key !== '__proto__' && key !== 'constructor' && key !== 'prototype' && key !== 'file'
+					));
+				}
+			} catch (error) {
+				Logger.error(`缓存模组元信息失败: ${mod.file}/modloader.mod.json`, error);
+			}
+
+			const canConfig = this.hasModConfig(mod.file);
+			infoEntries.push({
+				file: mod.file,
+				order: mod.order,
+				enabled: mod.enabled,
+				metadata: { ...metadata, file: mod.file, canConfig },
+			});
+
+			let config = null;
+			if (canConfig) {
+				try {
+					const rawConfig = this.readFileSync(path.join('mods', mod.file, 'modloader.config.json'));
+					if (rawConfig) {
+						const parsed = JSON.parse(rawConfig);
+						if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+							throw new Error('modloader.config.json 必须是对象');
+						}
+						config = parsed;
+					}
+				} catch (error) {
+					Logger.error(`缓存模组配置失败: ${mod.file}/modloader.config.json`, error);
+				}
+			}
+			configEntries.push({ file: mod.file, config });
+		}
+
+		const generatedAt = Date.now();
+		const infoOk = this.writeCacheFile(this.getModInfoCachePath(), {
+			schemaVersion: 1,
+			generatedAt,
+			entries: infoEntries,
+		});
+		const configOk = this.writeCacheFile(this.getModConfigCachePath(), {
+			schemaVersion: 1,
+			generatedAt,
+			entries: configEntries,
+		});
+		return {
+			success: infoOk && configOk,
+			infoCount: infoEntries.length,
+			configCount: configEntries.filter(entry => entry.config !== null).length,
+		};
+	},
+
+	/** 返回缓存的模组元信息, 不触发重新扫描. */
+	getCachedModInfos() {
+		return this.readCacheFile(this.getModInfoCachePath())?.entries ?? [];
+	},
+
+	/** 返回缓存的模组配置定义, 不触发重新扫描. */
+	getCachedModConfigs() {
+		return this.readCacheFile(this.getModConfigCachePath())?.entries ?? [];
+	},
+
 	/** 判断模组是否包含 modloader.config.json. */
 	hasModConfig(file) {
 		const full = this.resolvePath(path.join('mods', file, 'modloader.config.json'));
@@ -980,7 +1124,9 @@ const ModManagerApi = {
 			.filter(e => e && this.isPluginEntryName(e.file) && !this.isSelectedGameCoreEntry(e.file))
 			.map((e, i) => ({ file: e.file, order: i + 1, enabled: e.enabled !== false }));
 
-		return this.writeModOrder(entries);
+		const success = this.writeModOrder(entries);
+		if (success) this.refreshModCaches();
+		return success;
 	},
 
 	/**
