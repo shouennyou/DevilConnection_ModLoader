@@ -1,9 +1,9 @@
-# window.modloader 模组接口
+# window.api.modloader 模组接口
 
-本文件说明游戏窗口中提供给模组调用的 `window.modloader` 文件接口. 接口由 ModLoader preload 注入, 可在 `modloader.mod.json` 声明的注入脚本中使用.
+本文件说明游戏窗口中提供给模组调用的 `window.api.modloader` 文件接口. 接口由 ModLoader preload 注入, 可在 `modloader.mod.json` 声明的注入脚本中使用.
 
 ```js
-const modloader = window.modloader
+const modloader = window.api?.modloader
 
 if (!modloader) {
   throw new Error('ModLoader 文件接口不可用')
@@ -11,33 +11,6 @@ if (!modloader) {
 ```
 
 除名称带 `Sync` 的方法外, 所有方法均返回 `Promise`. 模组通常应优先使用异步方法, 避免阻塞游戏渲染线程.
-
-## 接口总览
-
-`window.modloader` 是面向模组运行时的受限文件接口, 规范入口如下:
-
-```js
-const api = window.modloader
-```
-
-`window.modloader` 是唯一受支持的入口。模组管理、安装、更新和存档迁移接口位于 [`MODMANAGER_API.md`](MODMANAGER_API.md) 的 `window.modmanager`，不应由普通游戏模组调用。
-
-| 类别 | 方法 | 用途 |
-| --- | --- | --- |
-| 运行时信息 | `returnModLoaderDataPath` | 取得当前实际使用的可写数据根目录。 |
-| 文本文件 | `readFile`、`writeFile`、`appendFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本和 JSON 配置。 |
-| 二进制文件 | `readBuffer`、`writeBuffer` 及对应 `Sync` 方法 | 读写中小型二进制数据。 |
-| 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
-| 文件查询 | `stat`、`getSize`、`readdir`、`exists` 及对应 `Sync` 方法 | 查询路径类型、大小、目录项和是否存在。 |
-| 文件变更 | `mkdir`、`rename`、`copyFile`、`unlink`、`rmdir` 及对应 `Sync` 方法 | 创建、移动、复制或删除文件与目录。 |
-
-除 `returnModLoaderDataPath()` 外，本接口所有路径参数均遵循下方的“路径规则”。
-
-## 运行时信息
-
-| 方法 | 返回值 | 说明 |
-| --- | --- | --- |
-| `returnModLoaderDataPath()` | `string` | 返回 ModLoader 当前实际使用的数据根目录。安装目录不可写时，该目录可能是 Electron 的 `userData`，不要假设它等于 `resources`。 |
 
 ## 路径规则
 
@@ -47,7 +20,7 @@ const api = window.modloader
 | --- | --- | --- |
 | `config/example-complete-mod.json` | `resources/config/example-complete-mod.json` | 模组持久化配置. |
 | `config/example-complete-mod/data.json` | `resources/config/example-complete-mod/data.json` | 模组私有数据目录. |
-| `../_storage/save.sav` | `resources` 同级的 `_storage/save.sav` | 游戏存档相关数据. |
+| `../_storage/save.dat` | `resources` 同级的 `_storage/save.dat` | 游戏存档相关数据. |
 
 - 不要使用绝对路径.
 - 路径不能包含 NUL 字符或越出允许根目录的 `..`.
@@ -68,7 +41,7 @@ interface FsResult {
 `success` 为 `false` 时, `error` 包含失败原因. 调用方应检查该字段:
 
 ```js
-const result = await window.modloader.writeFile(
+const result = await window.api.modloader.writeFile(
   'config/example-complete-mod.json',
   JSON.stringify({ enabled: true }, null, 2),
 )
@@ -94,7 +67,7 @@ if (!result.success) {
 读取和保存 JSON 配置示例:
 
 ```js
-const api = window.modloader
+const api = window.api.modloader
 const file = 'config/example-complete-mod.json'
 const content = await api.readFile(file)
 
@@ -126,7 +99,7 @@ if (!result.success) {
 | `writeBuffer(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `Promise<FsResult>` | 异步覆盖写入二进制文件. |
 
 ```js
-const api = window.modloader
+const api = window.api.modloader
 const response = await fetch('https://example.com/assets/icon.png')
 const buffer = await response.arrayBuffer()
 const result = await api.writeBuffer('config/example-complete-mod/icon.png', buffer)
@@ -173,7 +146,7 @@ interface FileStreamReadResult {
 流式复制示例:
 
 ```js
-const api = window.modloader
+const api = window.api.modloader
 const source = await api.createReadStream('config/example-complete-mod/source.bin')
 
 if (!source.success || !source.id) {
@@ -271,4 +244,4 @@ interface FileStat {
 - 大于数 MiB 的文件使用流式接口, 避免一次性占用大量渲染进程内存.
 - 删除和覆盖写入前先检查路径, `rmdir` 会递归删除整个目录.
 - 不要把会话 ID 保存到配置文件. 它只在当前游戏窗口存活期间有效.
-- 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.modloader` 可能不存在, 调用前应进行存在性检查.
+- 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.api?.modloader` 可能不存在, 调用前应进行存在性检查.

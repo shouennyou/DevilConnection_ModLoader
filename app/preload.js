@@ -5,9 +5,8 @@ const {
 const fs = require('fs')
 
 let modloader = {}
-let modmanager = {}
 try {
-	({ modloader, modmanager } = require('devilconnection-modloader/extra/preload'))
+	({ modloader } = require('devilconnection-modloader/extra/preload'))
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
@@ -17,10 +16,6 @@ try {
 } catch (e) {
 	console.error('[ModLoader] 加载失败:', e);
 }
-
-// ModLoader 接口只通过顶层入口暴露.
-contextBridge.exposeInMainWorld('modloader', modloader)
-contextBridge.exposeInMainWorld('modmanager', modmanager)
 
 contextBridge.exposeInMainWorld('api', {
 	//process
@@ -134,4 +129,6 @@ contextBridge.exposeInMainWorld('api', {
 	log: async (...args) => {
 		await ipcRenderer.invoke('log', args)
 	},
+	
+	modloader,
 })

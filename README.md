@@ -10,8 +10,7 @@
 
 ## 开发文档
 
-- [模组文件 API 文档](MODLOADER_API.md): `window.modloader` 的调用方法、返回数据格式和使用示例.
-- [模组管理 API 文档](MODMANAGER_API.md): `window.modmanager` 的模组浏览、缓存、更新、游戏核心与存档迁移接口.
+- [模组文件 API 文档](MODLOADER_API.md): `window.api.modloader` 的调用方法、返回数据格式和使用示例.
 
 ## 主要功能
 
