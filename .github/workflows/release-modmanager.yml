@@ -127,7 +127,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Package app
-        run: pnpm run ${{ matrix.command }} -- --publish never
+        run: pnpm run ${{ matrix.command }}
 
       - name: Upload packages
         uses: actions/upload-artifact@v7

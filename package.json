@@ -90,9 +90,9 @@
   "scripts": {
     "start": "electron app",
     "app:dir": "electron-builder --dir",
-    "app:win": "electron-builder --win",
-    "app:mac": "electron-builder --mac",
-    "app:linux": "electron-builder --linux",
+    "app:win": "electron-builder --win --publish=never",
+    "app:mac": "electron-builder --mac --publish=never",
+    "app:linux": "electron-builder --linux --publish=never",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
