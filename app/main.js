@@ -3,6 +3,7 @@ import {
 } from 'module';
 
 const require = createRequire(import.meta.url);
+const { getConfigDataPath } = require('devilconnection-modloader/utils/RuntimePaths');
 
 let modLoaderEntry = null;
 
@@ -50,10 +51,6 @@ import {
 	writeFileSync
 } from 'fs';
 import {
-	initialize,
-	enable
-} from '@electron/remote/main/index.js';
-import {
 	safeStorage
 } from 'electron/main';
 import {
@@ -97,19 +94,26 @@ const MANAGER_WINDOW_SIZE = {
 
 let mainWindow = null;
 let managerWindow = null;
-let remoteInitialized = false;
 app.commandLine.appendSwitch('js-flags', '--expose-gc');
-
-function ensureRemoteInitialized() {
-	if (remoteInitialized) return;
-	initialize();
-	remoteInitialized = true;
-}
 
 const scSize = {
 	'width': 1280,
 	'height': 960
 };
+
+function isDebugModeEnabled() {
+	try {
+		const resourcesPath = path.normalize(process.resourcesPath || process.cwd());
+		const configPath = join(getConfigDataPath(resourcesPath), 'config', 'mod-manager.json');
+		const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+		return config?.debugMode === true;
+	} catch (error) {
+		if (error?.code !== 'ENOENT') {
+			console.error('[Debug] 读取 Debug 模式配置失败:', error);
+		}
+		return false;
+	}
+}
 
 async function triggerScreenshot(x, y, width, height) {
 	const screenshot = await mainWindow.capturePage({
@@ -158,10 +162,12 @@ function createMainWindow() {
 		return mainWindow;
 	}
 
-	ensureRemoteInitialized();
 	mainWindow = new BrowserWindow(createWindowOptions('preload.js', MAIN_WINDOW_SIZE));
 	loadModLoader(mainWindow);
 	mainWindow.loadURL(url('file', './index.html'));
+	if (isDebugModeEnabled()) {
+		mainWindow.webContents.openDevTools();
+	}
 	mainWindow.removeMenu();
 	mainWindow.on('close', function() {
 		console.log('close');
@@ -180,7 +186,6 @@ function createManagerWindow() {
 		return managerWindow;
 	}
 
-	ensureRemoteInitialized();
 	managerWindow = new BrowserWindow(createWindowOptions('preload-manager.js', MANAGER_WINDOW_SIZE, MANAGER_PARTITION));
 	managerWindow.loadURL(url('file', './ui/index.html'));
 	managerWindow.removeMenu();
@@ -195,8 +200,6 @@ app.on('ready', () => {
 });
 
 app.on('browser-window-created', (_event, window) => {
-	ensureRemoteInitialized();
-	enable(window.webContents);
 	window.webContents.on('before-input-event', (event, input) => {
 		if (window !== mainWindow || input.type !== 'keyDown' || input.key !== 'F8') return;
 		event.preventDefault();
