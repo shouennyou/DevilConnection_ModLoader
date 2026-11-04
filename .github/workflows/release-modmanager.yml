@@ -185,12 +185,18 @@ jobs:
 
       - name: Publish Windows packages
         if: ${{ inputs.build_windows }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec electron-builder publish --policy always --files release/windows/*
 
       - name: Publish Linux packages
         if: ${{ inputs.build_linux }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec electron-builder publish --policy always --files release/linux/*
 
       - name: Publish macOS packages
         if: ${{ inputs.build_macos }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec electron-builder publish --policy always --files release/macos/*
