@@ -35,7 +35,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Create build matrix
         id: matrix
@@ -66,20 +66,25 @@ jobs:
           repository: shouennyou/DevilConnection_ModManager
           path: DevilConnection_ModManager
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: DevilConnection_ModManager/package-lock.json
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: DevilConnection_ModManager/pnpm-lock.yaml
 
       - name: Install mod manager dependencies
         working-directory: DevilConnection_ModManager
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build mod manager
         working-directory: DevilConnection_ModManager
-        run: npm run build
+        run: pnpm run build
 
       - name: Upload mod manager UI
         uses: actions/upload-artifact@v5
@@ -100,12 +105,17 @@ jobs:
       - name: Check out mod loader
         uses: actions/checkout@v7
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Download mod manager UI
         uses: actions/download-artifact@v5
@@ -114,10 +124,10 @@ jobs:
           path: app/ui
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Package app
-        run: npm run ${{ matrix.command }} -- --publish never
+        run: pnpm run ${{ matrix.command }} -- --publish never
 
       - name: Upload packages
         uses: actions/upload-artifact@v5
@@ -133,15 +143,20 @@ jobs:
       - name: Check out mod loader
         uses: actions/checkout@v7
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Download Windows packages
         if: ${{ inputs.build_windows }}
@@ -168,16 +183,16 @@ jobs:
         if: ${{ inputs.build_windows }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder publish --policy always --files release/windows/*
+        run: pnpm exec electron-builder publish --policy always --files release/windows/*
 
       - name: Publish Linux packages
         if: ${{ inputs.build_linux }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder publish --policy always --files release/linux/*
+        run: pnpm exec electron-builder publish --policy always --files release/linux/*
 
       - name: Publish macOS packages
         if: ${{ inputs.build_macos }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder publish --policy always --files release/macos/*
+        run: pnpm exec electron-builder publish --policy always --files release/macos/*
