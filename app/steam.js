@@ -1,35 +1,32 @@
 import { init } from 'steamworks.js';
+import { app } from 'electron';
+import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
-import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { getConfigDataPath } = require('devilconnection-modloader/utils/RuntimePaths');
+const { getWritableDataPath } = require('devilconnection-modloader/utils/RuntimePaths');
 
 // 游戏在 Steam 平台的 AppID.
 const APP_ID = 3054820;
 
-// 配置文件: <可写数据目录>/config/mod-manager.json.
+// 配置文件: <dataPath>/config/mod-manager.json.
 const CONFIG_DIR = 'config';
 const CONFIG_FILE = 'mod-manager.json';
+const LEGACY_CONFIG_FILE = 'modloader.json';
 
 // Steam 通讯仅在启动时初始化一次. null 表示未启用.
 let client = null;
 
-function getResourcesPath() {
-	return path.normalize(process.resourcesPath || process.cwd());
-}
-
-/** 返回与 ModManager 相同的可写配置数据目录. */
-function getDataPath() {
-	return getConfigDataPath(getResourcesPath());
-}
-
 function configPath(file = CONFIG_FILE) {
-	return path.join(getDataPath(), CONFIG_DIR, file);
+	return path.join(getConfigDataPath(), CONFIG_DIR, file);
 }
 
-function readConfigFile(file = CONFIG_FILE) {
+function getConfigDataPath() {
+	return getWritableDataPath(process.resourcesPath, { app }, fs);
+}
+
+function readConfigFile(file) {
 	try {
 		return JSON.parse(fs.readFileSync(configPath(file), 'utf-8')) || {};
 	} catch (error) {
@@ -40,9 +37,14 @@ function readConfigFile(file = CONFIG_FILE) {
 	}
 }
 
-/** 读取 Steam 配置对象. */
+/** 读取配置对象, 首次启动时迁移旧版 modloader.json. */
 function readConfig() {
-	return readConfigFile() || {};
+	const current = readConfigFile(CONFIG_FILE);
+	if (current) return current;
+	const legacy = readConfigFile(LEGACY_CONFIG_FILE);
+	if (!legacy) return {};
+	writeConfig(legacy);
+	return legacy;
 }
 
 /** 写入配置对象, 自动创建 config 目录. */
