@@ -162,13 +162,23 @@ function createMainWindow() {
 		return mainWindow;
 	}
 
-	mainWindow = new BrowserWindow(createWindowOptions('preload.js', MAIN_WINDOW_SIZE));
-	loadModLoader(mainWindow);
+	// ModLoader 会在无有效游戏核心时拒绝启动; 先隐藏窗口以避免失败时闪现空白页.
+	mainWindow = new BrowserWindow({
+		...createWindowOptions('preload.js', MAIN_WINDOW_SIZE),
+		show: false,
+	});
+	if (!loadModLoader(mainWindow)) {
+		console.warn('[ModLoader] 初始化未完成，已取消游戏窗口启动');
+		mainWindow.destroy();
+		mainWindow = null;
+		return null;
+	}
 	mainWindow.loadURL(url('file', './index.html'));
 	if (isDebugModeEnabled()) {
 		mainWindow.webContents.openDevTools();
 	}
 	mainWindow.removeMenu();
+	mainWindow.show();
 	mainWindow.on('close', function() {
 		console.log('close');
 		mainWindow.webContents.send('asynchronous-message', 'closeWindow');
@@ -225,7 +235,8 @@ ipcMain.handle('window:launchGame', async (event) => {
 	if (!managerWindow || managerWindow.isDestroyed() || event.sender !== managerWindow.webContents) {
 		return false;
 	}
-	createMainWindow();
+	const gameWindow = createMainWindow();
+	if (!gameWindow) return false;
 	managerWindow.close();
 	return true;
 });
