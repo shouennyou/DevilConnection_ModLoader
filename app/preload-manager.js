@@ -10,7 +10,9 @@ try {
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
-const { modloader: ignoredLegacyModLoader, ...apiExtraWithoutModLoader } = apiExtra
+const apiExtraForLegacyApi = { ...apiExtra }
+delete apiExtraForLegacyApi.modloader
+delete apiExtraForLegacyApi.modmanager
 
 // ModLoader 接口只通过顶层入口暴露.
 if (apiExtra.modloader) {
@@ -133,7 +135,7 @@ contextBridge.exposeInMainWorld('api', {
 		await ipcRenderer.invoke('log', args)
 	},
 	
-	...apiExtraWithoutModLoader,
+	...apiExtraForLegacyApi,
 	launchGame: async () => {
 		return await ipcRenderer.invoke('window:launchGame');
 	},
