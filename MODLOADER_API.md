@@ -53,27 +53,6 @@ const api = window.modloader
 - `stat` 和 `readdir` 可以传入空字符串以查询 `resources` 根目录. 其余方法必须传入根目录下的目标路径.
 - 接口不按模组隔离文件权限. 请仅读写自己使用的 `config/<模组 ID>.json` 或 `config/<模组 ID>/` 路径, 不要修改 `app.asar`、其他模组文件或 `config/mod_order.json`.
 
-### 游戏资源虚拟根目录（只读）
-
-下列两个保留前缀不对应 `resources` 中的真实目录，专用于读取当前游戏核心资源。路径必须是根目录下的相对路径，不能包含 `..`；可写接口会返回“游戏资源虚拟目录为只读”。
-
-| 路径前缀 | 读取视图 | 支持的操作 |
-| --- | --- | --- |
-| `game-resources/` | 按启用模组的优先级查找，未命中时回退到当前选定的游戏核心 ASAR。 | `readFile*`、`stat*`、`readdir*`、`createReadStream`、作为 `copyFile*` 的源路径。 |
-| `original-game-resources/` | 忽略全部模组，只读取当前选定的游戏核心 ASAR。 | 同上。 |
-
-例如：
-
-```js
-// 覆盖后的资源：优先取得最高优先级模组中的 index.html。
-const overridden = await window.modloader.readFile('game-resources/index.html')
-
-// 游戏核心的原始资源：不受任何模组覆盖影响。
-const original = await window.modloader.readFile('original-game-resources/index.html')
-```
-
-`readdir('game-resources/目录')` 返回合并后的目录视图；同名目录项由较高优先级的模组获胜。两个虚拟根依赖模组管理器中已选定的游戏核心 ASAR；未配置核心时，原始视图及未被模组命中的覆盖视图返回 `null`。
-
 ## 通用结果格式
 
 写入、删除、创建和复制操作返回 `FsResult`:
