@@ -1,6 +1,6 @@
 {
   "name": "devilconnection-modloader",
-  "version": "1.7.1",
+  "version": "1.8.1",
   "description": "Devil Connection 的运行时模组加载器与模组管理器集成。",
   "main": "ModLoader/index.js",
   "type": "commonjs",
@@ -11,7 +11,7 @@
     "utils/"
   ],
   "dependencies": {
-    "@electron/asar": "^4.2.1",
+    "@electron/asar": "^4.3.1",
     "adm-zip": ">=0.5.16"
   },
   "engines": {

@@ -11,7 +11,45 @@ const electron = require('electron');
 let Logger;
 let PluginManager;
 let VERSION;
+let electronFs;
 const MANAGER_PARTITION = 'persist:dc-modmanager';
+
+function isPathWithin(rootPath, targetPath) {
+	const relative = path.relative(path.resolve(rootPath), path.resolve(targetPath));
+	return relative === ''
+		|| (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+/**
+ * 注入脚本必须是模组根目录内的相对路径. 先做词法校验，再在目录模组中
+ * 对实际文件执行 realpath 校验，避免经由符号链接离开模组目录。
+ */
+function resolveInjectionPath(pluginPath, requestedPath) {
+	if (typeof requestedPath !== 'string' || !requestedPath || requestedPath.includes('\0')) return null;
+	if (path.isAbsolute(requestedPath)
+		|| path.win32.isAbsolute(requestedPath)
+		|| path.posix.isAbsolute(requestedPath)) return null;
+
+	const pluginRoot = path.resolve(pluginPath);
+	const injectionPath = path.resolve(pluginRoot, requestedPath);
+	if (!isPathWithin(pluginRoot, injectionPath)) return null;
+
+	// ASAR 内条目不能按宿主文件系统 realpath；其词法边界已由上方校验保护。
+	if (path.extname(pluginRoot).toLowerCase() === '.asar') return injectionPath;
+	try {
+		const realPluginRoot = fs.realpathSync(pluginRoot);
+		const realInjectionPath = fs.realpathSync(injectionPath);
+		return isPathWithin(realPluginRoot, realInjectionPath) ? injectionPath : null;
+	} catch (error) {
+		// 不存在的文件由调用方按原有语义处理；存在但无法解析的路径不应被注入。
+		return fs.existsSync(injectionPath) ? null : injectionPath;
+	}
+}
+
+/** 使用未被资源路由 Hook 替换的 Electron fs 读取已校验的模组文件。 */
+function readPluginFileSync(filePath, options) {
+	return (electronFs || fs).readFileSync(filePath, options);
+}
 
 function isManagerWindow(win) {
 	try {
@@ -149,7 +187,7 @@ const Injection = {
 			let modInfo = null;
 			try {
 				if (fs.existsSync(modJsonPath)) {
-					modInfo = JSON.parse(fs.readFileSync(modJsonPath, 'utf8'));
+					modInfo = JSON.parse(readPluginFileSync(modJsonPath, 'utf8'));
 				}
 			} catch (error) {
 				Logger.error(`读取模组注入配置失败: ${modJsonPath}`, error);
@@ -161,7 +199,7 @@ const Injection = {
 				if (!fs.existsSync(hookPath)) continue;
 				const pluginName = path.basename(pluginPath);
 				try {
-					const content = fs.readFileSync(hookPath, 'utf8');
+					const content = readPluginFileSync(hookPath, 'utf8');
 					this._scripts.push({
 						name: pluginName,
 						code: `
@@ -191,9 +229,13 @@ const Injection = {
 			for (const injection of injections) {
 				if (!injection || typeof injection.path !== 'string') continue;
 
-				// 注入路径相对模组目录, 兼容 "./hook.js" 和 "hook.js".
-				const injectionPath = path.resolve(pluginPath, injection.path);
+				// 仅接受模组根目录内的相对路径，兼容 "./hook.js" 和 "hook.js".
+				const injectionPath = resolveInjectionPath(pluginPath, injection.path);
 				const injectionName = injection.name || path.basename(injection.path);
+				if (!injectionPath) {
+					Logger.warn(`注入路径越出模组根目录, 已跳过: ${path.basename(pluginPath)} -> ${injection.path}`);
+					continue;
+				}
 
 				if (!fs.existsSync(injectionPath)) {
 					Logger.info(`注入文件不存在, 已跳过: ${injectionPath}`);
@@ -202,7 +244,7 @@ const Injection = {
 
 				let content;
 				try {
-					content = fs.readFileSync(injectionPath, 'utf8');
+					content = readPluginFileSync(injectionPath, 'utf8');
 				} catch (error) {
 					Logger.error(`读取注入文件失败: ${injectionPath}`, error);
 					continue;
@@ -270,11 +312,13 @@ const Injection = {
 function init({
 	Logger: L,
 	PluginManager: PM,
-	VERSION: V
+	VERSION: V,
+	electronFs: EF
 }) {
 	Logger = L;
 	PluginManager = PM;
 	VERSION = V;
+	electronFs = EF;
 }
 
 module.exports = {

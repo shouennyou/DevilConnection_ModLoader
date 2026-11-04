@@ -184,37 +184,21 @@ const modLoaderAPI = {
 	returnModLoaderDataPath: () => {
 		return ipcRenderer.sendSync('modloader:getDataPath');
 	},
-	/** 同步读取 subPath 文件内容,返回字符串,失败返回 null */
-	readFileSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:readFileSync', subPath || '');
+	/** 同步读取文件. encoding 默认 utf8, 传 null 返回 Uint8Array. */
+	readFileSync: (subPath, options) => {
+		return ipcRenderer.sendSync('modloader:readFileSync', { subPath: subPath || '', options: options || {} });
 	},
-	/** 异步读取 subPath 文件内容,返回字符串,失败返回 null */
-	readFile: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:readFile', subPath || '');
+	/** 异步读取文件. encoding 默认 utf8, 传 null 返回 Uint8Array. */
+	readFile: async (subPath, options) => {
+		return await ipcRenderer.invoke('modloader:readFile', { subPath: subPath || '', options: options || {} });
 	},
-	/** 同步写入 subPath 文件内容(自动创建父目录),返回 {success, error?} */
-	writeFileSync: (subPath, content) => {
-		return ipcRenderer.sendSync('modloader:writeFileSync', { subPath: subPath || '', content: content ?? '' });
+	/** 同步写入文件. 支持字符串、ArrayBuffer 与 Uint8Array; append 默认 false. */
+	writeFileSync: (subPath, content, options) => {
+		return ipcRenderer.sendSync('modloader:writeFileSync', { subPath: subPath || '', content: content ?? '', options: options || {} });
 	},
-	/** 异步写入 subPath 文件内容(自动创建父目录),返回 {success, error?} */
-	writeFile: async (subPath, content) => {
-		return await ipcRenderer.invoke('modloader:writeFile', { subPath: subPath || '', content: content ?? '' });
-	},
-	/** 同步读取完整二进制文件,返回 Uint8Array 或 null */
-	readBufferSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:readBufferSync', subPath || '');
-	},
-	/** 异步读取完整二进制文件,返回 Uint8Array 或 null */
-	readBuffer: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:readBuffer', subPath || '');
-	},
-	/** 同步写入完整二进制文件(自动创建父目录),buffer 传 ArrayBuffer,返回 {success, error?} */
-	writeBufferSync: (subPath, buffer) => {
-		return ipcRenderer.sendSync('modloader:writeBufferSync', { subPath: subPath || '', buffer });
-	},
-	/** 异步写入完整二进制文件(自动创建父目录),buffer 传 ArrayBuffer,返回 {success, error?} */
-	writeBuffer: async (subPath, buffer) => {
-		return await ipcRenderer.invoke('modloader:writeBuffer', { subPath: subPath || '', buffer });
+	/** 异步写入文件. 支持字符串、ArrayBuffer 与 Uint8Array; append 默认 false. */
+	writeFile: async (subPath, content, options) => {
+		return await ipcRenderer.invoke('modloader:writeFile', { subPath: subPath || '', content: content ?? '', options: options || {} });
 	},
 	/** 创建二进制读流会话,返回 {success, id?, size?, error?}. */
 	createReadStream: async (subPath) => {
@@ -236,29 +220,13 @@ const modLoaderAPI = {
 	closeStream: async (id, commit) => {
 		return await ipcRenderer.invoke('modloader:closeStream', { id, commit: commit === true });
 	},
-	/** 同步追加文本(自动创建父目录),返回 {success, error?} */
-	appendFileSync: (subPath, content) => {
-		return ipcRenderer.sendSync('modloader:appendFileSync', { subPath: subPath || '', content: content ?? '' });
+	/** 同步删除文件或目录. options 可指定 recursive 与 force, 均默认 false. */
+	rmSync: (subPath, options) => {
+		return ipcRenderer.sendSync('modloader:rmSync', { subPath: subPath || '', options: options || {} });
 	},
-	/** 异步追加文本(自动创建父目录),返回 {success, error?} */
-	appendFile: async (subPath, content) => {
-		return await ipcRenderer.invoke('modloader:appendFile', { subPath: subPath || '', content: content ?? '' });
-	},
-	/** 同步删除文件,返回 {success, error?} */
-	unlinkSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:unlinkSync', subPath || '');
-	},
-	/** 异步删除文件,返回 {success, error?} */
-	unlink: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:unlink', subPath || '');
-	},
-	/** 同步递归删除文件夹(不存在视为成功),返回 {success, error?} */
-	rmdirSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:rmdirSync', subPath || '');
-	},
-	/** 异步递归删除文件夹(不存在视为成功),返回 {success, error?} */
-	rmdir: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:rmdir', subPath || '');
+	/** 异步删除文件或目录. options 可指定 recursive 与 force, 均默认 false. */
+	rm: async (subPath, options) => {
+		return await ipcRenderer.invoke('modloader:rm', { subPath: subPath || '', options: options || {} });
 	},
 	/** 同步获取文件状态,不存在返回 null */
 	statSync: (subPath) => {
@@ -268,14 +236,6 @@ const modLoaderAPI = {
 	stat: async (subPath) => {
 		return reviveStats(await ipcRenderer.invoke('modloader:stat', subPath || ''));
 	},
-	/** 同步获取文件或目录大小(目录包含全部子项),失败返回 null */
-	getSizeSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:getSizeSync', subPath || '');
-	},
-	/** 异步获取文件或目录大小(目录包含全部子项),失败返回 null */
-	getSize: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:getSize', subPath || '');
-	},
 	/** 同步读取目录项名数组,失败返回 null */
 	readdirSync: (subPath) => {
 		return ipcRenderer.sendSync('modloader:readdirSync', subPath || '');
@@ -284,14 +244,6 @@ const modLoaderAPI = {
 	readdir: async (subPath) => {
 		return await ipcRenderer.invoke('modloader:readdir', subPath || '');
 	},
-	/** 同步判断文件或目录是否存在,返回 boolean */
-	existsSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:existsSync', subPath || '');
-	},
-	/** 异步判断文件或目录是否存在,返回 boolean */
-	exists: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:exists', subPath || '');
-	},
 	/** 同步重命名/移动(自动创建目标父目录),返回 {success, error?} */
 	renameSync: (oldPath, newPath) => {
 		return ipcRenderer.sendSync('modloader:renameSync', { oldPath: oldPath || '', newPath: newPath || '' });
@@ -299,14 +251,6 @@ const modLoaderAPI = {
 	/** 异步重命名/移动(自动创建目标父目录),返回 {success, error?} */
 	rename: async (oldPath, newPath) => {
 		return await ipcRenderer.invoke('modloader:rename', { oldPath: oldPath || '', newPath: newPath || '' });
-	},
-	/** 同步创建目录(recursive),返回 {success, error?} */
-	mkdirSync: (subPath) => {
-		return ipcRenderer.sendSync('modloader:mkdirSync', subPath || '');
-	},
-	/** 异步创建目录(recursive),返回 {success, error?} */
-	mkdir: async (subPath) => {
-		return await ipcRenderer.invoke('modloader:mkdir', subPath || '');
 	},
 	/** 同步复制文件(自动创建目标父目录),返回 {success, error?} */
 	copyFileSync: (srcPath, destPath) => {

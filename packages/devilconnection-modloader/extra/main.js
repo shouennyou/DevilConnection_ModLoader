@@ -82,40 +82,24 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return entry;
 	};
 
-	// ReadFileSync: 输入 subPath. 同步读取相对 process.resourcesPath 的文本文件, 返回 string|null.
-	ipcMain.on('modloader:readFileSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.readFileSync(subPath || '');
+	// ReadFileSync: 输入 {subPath, options}. encoding 默认 utf8, 为 null 时返回二进制数据.
+	ipcMain.on('modloader:readFileSync', (event, { subPath, options } = {}) => {
+		event.returnValue = ModLoaderApi.readFileSync(subPath || '', options);
 	});
 
-	// ReadFile: 输入 subPath. 异步读取相对 process.resourcesPath 的文本文件, 返回 Promise<string|null>.
-	ipcMain.handle('modloader:readFile', async (event, subPath) => {
-		return ModLoaderApi.readFile(subPath || '');
+	// ReadFile: 输入 {subPath, options}. encoding 默认 utf8, 为 null 时返回二进制数据.
+	ipcMain.handle('modloader:readFile', async (event, { subPath, options } = {}) => {
+		return ModLoaderApi.readFile(subPath || '', options);
 	});
 
-	// WriteFileSync: 输入 {subPath, content}. 同步写入文本文件, 返回 {success, error?}.
-	ipcMain.on('modloader:writeFileSync', (event, { subPath, content }) => {
-		event.returnValue = ModLoaderApi.writeFileSync(subPath || '', content ?? '');
+	// WriteFileSync: 输入 {subPath, content, options}. 支持文本/二进制及 append 模式.
+	ipcMain.on('modloader:writeFileSync', (event, { subPath, content, options } = {}) => {
+		event.returnValue = ModLoaderApi.writeFileSync(subPath || '', content ?? '', options);
 	});
 
-	// WriteFile: 输入 {subPath, content}. 异步写入文本文件, 返回 Promise<{success, error?}>.
-	ipcMain.handle('modloader:writeFile', async (event, { subPath, content }) => {
-		return ModLoaderApi.writeFile(subPath || '', content ?? '');
-	});
-
-	// ReadBufferSync / ReadBuffer: 输入 subPath. 读取完整二进制文件, 分别返回 Buffer|null 和 Promise<Buffer|null>.
-	ipcMain.on('modloader:readBufferSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.readBufferSync(subPath || '');
-	});
-	ipcMain.handle('modloader:readBuffer', async (event, subPath) => {
-		return ModLoaderApi.readBuffer(subPath || '');
-	});
-
-	// WriteBufferSync / WriteBuffer: 输入 {subPath, buffer}. 写入完整二进制文件, 分别返回 {success, error?} 和 Promise<{success, error?}>.
-	ipcMain.on('modloader:writeBufferSync', (event, { subPath, buffer }) => {
-		event.returnValue = ModLoaderApi.writeBufferSync(subPath || '', buffer);
-	});
-	ipcMain.handle('modloader:writeBuffer', async (event, { subPath, buffer }) => {
-		return ModLoaderApi.writeBuffer(subPath || '', buffer);
+	// WriteFile: 输入 {subPath, content, options}. 支持文本/二进制及 append 模式.
+	ipcMain.handle('modloader:writeFile', async (event, { subPath, content, options } = {}) => {
+		return ModLoaderApi.writeFile(subPath || '', content ?? '', options);
 	});
 
 	// FileStream: 流会话仅保存在主进程, 渲染进程通过 id 顺序读写二进制块.
@@ -154,28 +138,12 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModLoaderApi.closeStream(entry.stream, commit === true);
 	});
 
-	// AppendFileSync / AppendFile: 输入 {subPath, content}. 追加文本文件内容, 分别返回 {success, error?} 和 Promise<{success, error?}>.
-	ipcMain.on('modloader:appendFileSync', (event, { subPath, content }) => {
-		event.returnValue = ModLoaderApi.appendFileSync(subPath || '', content ?? '');
+	// RmSync / Rm: 输入 {subPath, options}. 删除文件或目录, options 仅支持 recursive 与 force.
+	ipcMain.on('modloader:rmSync', (event, { subPath, options } = {}) => {
+		event.returnValue = ModLoaderApi.rmSync(subPath || '', options);
 	});
-	ipcMain.handle('modloader:appendFile', async (event, { subPath, content }) => {
-		return ModLoaderApi.appendFile(subPath || '', content ?? '');
-	});
-
-	// UnlinkSync / Unlink: 输入 subPath. 删除单个文件, 分别返回 {success, error?} 和 Promise<{success, error?}>.
-	ipcMain.on('modloader:unlinkSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.unlinkSync(subPath || '');
-	});
-	ipcMain.handle('modloader:unlink', async (event, subPath) => {
-		return ModLoaderApi.unlink(subPath || '');
-	});
-
-	// RmdirSync / Rmdir: 输入 subPath. 递归删除目录, 分别返回 {success, error?} 和 Promise<{success, error?}>.
-	ipcMain.on('modloader:rmdirSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.rmdirSync(subPath || '');
-	});
-	ipcMain.handle('modloader:rmdir', async (event, subPath) => {
-		return ModLoaderApi.rmdir(subPath || '');
+	ipcMain.handle('modloader:rm', async (event, { subPath, options } = {}) => {
+		return ModLoaderApi.rm(subPath || '', options);
 	});
 
 	// StatSync / Stat: 输入 subPath. 读取可跨 IPC 序列化的文件状态, 分别返回 FileStat|null 和 Promise<FileStat|null>.
@@ -186,14 +154,6 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModLoaderApi.stat(subPath || '');
 	});
 
-	// GetSizeSync / GetSize: 输入 subPath. 获取文件或目录总大小, 单位为字节, 分别返回 number|null 和 Promise<number|null>.
-	ipcMain.on('modloader:getSizeSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.getSizeSync(subPath || '');
-	});
-	ipcMain.handle('modloader:getSize', async (event, subPath) => {
-		return ModLoaderApi.getSize(subPath || '');
-	});
-
 	// ReaddirSync / Readdir: 输入 subPath. 读取目录项名称数组, 分别返回 string[]|null 和 Promise<string[]|null>.
 	ipcMain.on('modloader:readdirSync', (event, subPath) => {
 		event.returnValue = ModLoaderApi.readdirSync(subPath || '');
@@ -202,28 +162,12 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModLoaderApi.readdir(subPath || '');
 	});
 
-	// ExistsSync / Exists: 输入 subPath. 判断文件或目录是否存在, 分别返回 boolean 和 Promise<boolean>.
-	ipcMain.on('modloader:existsSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.existsSync(subPath || '');
-	});
-	ipcMain.handle('modloader:exists', async (event, subPath) => {
-		return ModLoaderApi.exists(subPath || '');
-	});
-
 	// RenameSync / Rename: 输入 {oldPath, newPath}. 重命名或移动文件, 分别返回 {success, error?} 和 Promise<{success, error?}>.
 	ipcMain.on('modloader:renameSync', (event, { oldPath, newPath }) => {
 		event.returnValue = ModLoaderApi.renameSync(oldPath || '', newPath || '');
 	});
 	ipcMain.handle('modloader:rename', async (event, { oldPath, newPath }) => {
 		return ModLoaderApi.rename(oldPath || '', newPath || '');
-	});
-
-	// MkdirSync / Mkdir: 输入 subPath. 递归创建目录, 分别返回 {success, error?} 和 Promise<{success, error?}>.
-	ipcMain.on('modloader:mkdirSync', (event, subPath) => {
-		event.returnValue = ModLoaderApi.mkdirSync(subPath || '');
-	});
-	ipcMain.handle('modloader:mkdir', async (event, subPath) => {
-		return ModLoaderApi.mkdir(subPath || '');
 	});
 
 	// CopyFileSync / CopyFile: 输入 {srcPath, destPath}. 复制文件, 分别返回 {success, error?} 和 Promise<{success, error?}>.

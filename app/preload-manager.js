@@ -10,8 +10,11 @@ try {
 } catch (e) {
 	console.error('[ModLoader] extra-preload 加载失败:', e);
 }
+const apiExtraForLegacyApi = { ...apiExtra }
+delete apiExtraForLegacyApi.modloader
+delete apiExtraForLegacyApi.modmanager
 
-// 新版顶层接口. window.api 中的同名入口暂时保留给旧版页面和模组使用.
+// ModLoader 接口只通过顶层入口暴露.
 if (apiExtra.modloader) {
 	contextBridge.exposeInMainWorld('modloader', apiExtra.modloader)
 }
@@ -132,7 +135,7 @@ contextBridge.exposeInMainWorld('api', {
 		await ipcRenderer.invoke('log', args)
 	},
 	
-	...apiExtra,
+	...apiExtraForLegacyApi,
 	launchGame: async () => {
 		return await ipcRenderer.invoke('window:launchGame');
 	},

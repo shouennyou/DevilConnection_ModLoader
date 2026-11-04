@@ -12,6 +12,32 @@ if (!modloader) {
 
 除名称带 `Sync` 的方法外, 所有方法均返回 `Promise`. 模组通常应优先使用异步方法, 避免阻塞游戏渲染线程.
 
+## 接口总览
+
+`window.modloader` 是面向模组运行时的受限文件接口, 规范入口如下:
+
+```js
+const api = window.modloader
+```
+
+`window.modloader` 是唯一受支持的入口。模组管理、安装、更新和存档迁移接口位于 [`MODMANAGER_API.md`](MODMANAGER_API.md) 的 `window.modmanager`，不应由普通游戏模组调用。
+
+| 类别 | 方法 | 用途 |
+| --- | --- | --- |
+| 运行时信息 | `returnModLoaderDataPath` | 取得当前实际使用的可写数据根目录。 |
+| 文件读写 | `readFile`、`writeFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本、JSON 与中小型二进制数据。 |
+| 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
+| 文件查询 | `stat`、`readdir` 及对应 `Sync` 方法 | 查询路径类型和目录项。 |
+| 文件变更 | `rename`、`copyFile`、`rm` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
+
+除 `returnModLoaderDataPath()` 外，本接口所有路径参数均遵循下方的“路径规则”。
+
+## 运行时信息
+
+| 方法 | 返回值 | 说明 |
+| --- | --- | --- |
+| `returnModLoaderDataPath()` | `string` | 返回 ModLoader 当前实际使用的数据根目录。安装目录不可写时，该目录可能是 Electron 的 `userData`，不要假设它等于 `resources`。 |
+
 ## 路径规则
 
 所有路径应使用相对于 `resources` 的正斜杠路径. 可访问范围仅限以下两个根目录:
@@ -24,8 +50,31 @@ if (!modloader) {
 
 - 不要使用绝对路径.
 - 路径不能包含 NUL 字符或越出允许根目录的 `..`.
-- `stat`、`getSize`、`readdir` 和 `exists` 可以传入空字符串以查询 `resources` 根目录. 其余方法必须传入根目录下的目标路径.
+- `stat` 和 `readdir` 可以传入空字符串以查询 `resources` 根目录. 其余方法必须传入根目录下的目标路径.
 - 接口不按模组隔离文件权限. 请仅读写自己使用的 `config/<模组 ID>.json` 或 `config/<模组 ID>/` 路径, 不要修改 `app.asar`、其他模组文件或 `config/mod_order.json`.
+
+### 游戏资源虚拟根目录（只读）
+
+下列两个保留前缀不对应 `resources` 中的真实目录，专用于读取当前游戏核心资源。路径必须是根目录下的相对路径，不能包含 `..`；可写接口会返回“游戏资源虚拟目录为只读”。
+
+| 路径前缀 | 读取视图 | 支持的操作 |
+| --- | --- | --- |
+| `game-resources/` | 按启用模组的优先级查找，未命中时回退到当前选定的游戏核心 ASAR。 | `readFile*`、`stat*`、`readdir*`、`createReadStream`、作为 `copyFile*` 的源路径。 |
+| `original-game-resources/` | 忽略全部模组，只读取当前选定的游戏核心 ASAR。 | 同上。 |
+
+例如：
+
+```js
+// 覆盖后的资源：优先取得最高优先级模组中的 index.html。
+const overridden = await window.modloader.readFile('game-resources/index.html')
+
+// 游戏核心的原始资源：不受任何模组覆盖影响。
+const original = await window.modloader.readFile('original-game-resources/index.html')
+```
+
+`readdir('game-resources/目录')` 返回合并后的目录视图；同名目录项由较高优先级的模组获胜。两个虚拟根依赖模组管理器中已选定的游戏核心 ASAR；未配置核心时，原始视图及未被模组命中的覆盖视图返回 `null`。
+
+当虚拟根可用时，`readdir('')` 和 `readdirSync('')` 会在 `resources` 根目录的结果中列出它。`game-resources` 在存在已加载资源来源时出现；`original-game-resources` 仅在已选定有效游戏核心时出现。两个名称均为保留名称，`stat*('game-resources')` 与 `stat*('original-game-resources')` 会返回只读虚拟目录状态。
 
 ## 通用结果格式
 
@@ -51,18 +100,26 @@ if (!result.success) {
 }
 ```
 
-## 文本文件
+## 文件读写
 
-文本按 UTF-8 读写. 写入和追加会自动创建父目录.
+`readFile` 默认按 UTF-8 返回字符串；传入 `{ encoding: null }` 时返回 `Uint8Array`。`writeFile` 接受字符串、`ArrayBuffer` 或 `Uint8Array`，默认覆盖写入；传入 `{ append: true }` 时追加内容。两种写入模式都会自动创建父目录。
 
 | 方法 | 参数 | 返回值 | 说明 |
 | --- | --- | --- | --- |
-| `readFileSync(path)` | `path: string` | `string \| null` | 同步读取文本. 路径不存在或读取失败时返回 `null`. |
-| `readFile(path)` | `path: string` | `Promise<string \| null>` | 异步读取文本. |
-| `writeFileSync(path, content)` | `path: string`, `content: string` | `FsResult` | 同步覆盖写入 UTF-8 文本. |
-| `writeFile(path, content)` | `path: string`, `content: string` | `Promise<FsResult>` | 异步覆盖写入 UTF-8 文本. |
-| `appendFileSync(path, content)` | `path: string`, `content: string` | `FsResult` | 同步追加 UTF-8 文本. |
-| `appendFile(path, content)` | `path: string`, `content: string` | `Promise<FsResult>` | 异步追加 UTF-8 文本. |
+| `readFileSync(path, options?)` | `path: string`, `options?: ReadOptions` | `string \| Uint8Array \| null` | 同步读取文本或二进制. |
+| `readFile(path, options?)` | `path: string`, `options?: ReadOptions` | `Promise<string \| Uint8Array \| null>` | 异步读取文本或二进制. |
+| `writeFileSync(path, content, options?)` | `path: string`, `content: string \| ArrayBuffer \| Uint8Array`, `options?: WriteOptions` | `FsResult` | 同步覆盖或追加写入. |
+| `writeFile(path, content, options?)` | `path: string`, `content: string \| ArrayBuffer \| Uint8Array`, `options?: WriteOptions` | `Promise<FsResult>` | 异步覆盖或追加写入. |
+
+```ts
+interface ReadOptions {
+  encoding?: 'utf8' | null // 默认 'utf8'；null 返回 Uint8Array
+}
+
+interface WriteOptions extends ReadOptions {
+  append?: boolean // 默认 false；true 时追加而非覆盖
+}
+```
 
 读取和保存 JSON 配置示例:
 
@@ -87,22 +144,11 @@ if (!result.success) {
 }
 ```
 
-## 二进制文件
-
-二进制接口适用于图片、音频、压缩包等中小型文件. 大文件应使用下方的流式接口.
-
-| 方法 | 参数 | 返回值 | 说明 |
-| --- | --- | --- | --- |
-| `readBufferSync(path)` | `path: string` | `Uint8Array \| null` | 同步读取完整二进制文件. |
-| `readBuffer(path)` | `path: string` | `Promise<Uint8Array \| null>` | 异步读取完整二进制文件. |
-| `writeBufferSync(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `FsResult` | 同步覆盖写入二进制文件. |
-| `writeBuffer(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `Promise<FsResult>` | 异步覆盖写入二进制文件. |
-
 ```js
 const api = window.modloader
 const response = await fetch('https://example.com/assets/icon.png')
 const buffer = await response.arrayBuffer()
-const result = await api.writeBuffer('config/example-complete-mod/icon.png', buffer)
+const result = await api.writeFile('config/example-complete-mod/icon.png', buffer, { encoding: null })
 
 if (!result.success) {
   console.error('[完整示例模组] 图片写入失败:', result.error)
@@ -192,22 +238,21 @@ try {
 | --- | --- | --- | --- |
 | `statSync(path)` | `path: string` | `FileStat \| null` | 同步读取文件或目录状态. |
 | `stat(path)` | `path: string` | `Promise<FileStat \| null>` | 异步读取文件或目录状态. |
-| `getSizeSync(path)` | `path: string` | `number \| null` | 同步获取字节大小. 目录会递归计算所有子项. |
-| `getSize(path)` | `path: string` | `Promise<number \| null>` | 异步获取字节大小. |
 | `readdirSync(path)` | `path: string` | `string[] \| null` | 同步读取目录项名称, 不含完整路径. |
 | `readdir(path)` | `path: string` | `Promise<string[] \| null>` | 异步读取目录项名称. |
-| `existsSync(path)` | `path: string` | `boolean` | 同步判断文件或目录是否存在. |
-| `exists(path)` | `path: string` | `Promise<boolean>` | 异步判断文件或目录是否存在. |
-| `mkdirSync(path)` | `path: string` | `FsResult` | 同步递归创建目录. |
-| `mkdir(path)` | `path: string` | `Promise<FsResult>` | 异步递归创建目录. |
 | `renameSync(oldPath, newPath)` | `oldPath: string`, `newPath: string` | `FsResult` | 同步重命名或移动, 自动创建目标父目录. |
 | `rename(oldPath, newPath)` | `oldPath: string`, `newPath: string` | `Promise<FsResult>` | 异步重命名或移动. |
 | `copyFileSync(sourcePath, targetPath)` | `sourcePath: string`, `targetPath: string` | `FsResult` | 同步复制文件, 自动创建目标父目录. |
 | `copyFile(sourcePath, targetPath)` | `sourcePath: string`, `targetPath: string` | `Promise<FsResult>` | 异步复制文件. |
-| `unlinkSync(path)` | `path: string` | `FsResult` | 同步删除单个文件. 文件不存在会返回失败. |
-| `unlink(path)` | `path: string` | `Promise<FsResult>` | 异步删除单个文件. |
-| `rmdirSync(path)` | `path: string` | `FsResult` | 同步递归删除目录. 目录不存在也视为成功. |
-| `rmdir(path)` | `path: string` | `Promise<FsResult>` | 异步递归删除目录. |
+| `rmSync(path, options?)` | `path: string`, `options?: RmOptions` | `FsResult` | 同步删除文件或目录. |
+| `rm(path, options?)` | `path: string`, `options?: RmOptions` | `Promise<FsResult>` | 异步删除文件或目录. |
+
+```ts
+interface RmOptions {
+  recursive?: boolean // 默认 false；删除非空目录时必须为 true
+  force?: boolean // 默认 false；为 true 时路径不存在仍返回 success
+}
+```
 
 `FileStat` 的类型判定方法与常用数据字段如下:
 
@@ -242,6 +287,6 @@ interface FileStat {
 
 - 文本配置优先放在 `config/<模组 ID>.json`, 结构化数据使用 `JSON.stringify(data, null, 2)` 保存.
 - 大于数 MiB 的文件使用流式接口, 避免一次性占用大量渲染进程内存.
-- 删除和覆盖写入前先检查路径, `rmdir` 会递归删除整个目录.
+- 删除前确认路径和 `rm` 选项；`rm(path, { recursive: true, force: true })` 会递归删除目录，且路径不存在也视为成功.
 - 不要把会话 ID 保存到配置文件. 它只在当前游戏窗口存活期间有效.
 - 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.modloader` 可能不存在, 调用前应进行存在性检查.

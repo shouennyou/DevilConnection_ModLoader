@@ -18,7 +18,7 @@ try {
 	console.error('[ModLoader] 加载失败:', e);
 }
 
-// 新版顶层接口. window.api.modloader 继续保留给旧版游戏脚本使用.
+// ModLoader 接口只通过顶层入口暴露.
 contextBridge.exposeInMainWorld('modloader', modloader)
 contextBridge.exposeInMainWorld('modmanager', modmanager)
 
@@ -134,6 +134,4 @@ contextBridge.exposeInMainWorld('api', {
 	log: async (...args) => {
 		await ipcRenderer.invoke('log', args)
 	},
-	
-	modloader,
 })
