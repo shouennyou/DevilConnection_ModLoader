@@ -27,28 +27,42 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: DevilConnection_ModManager/package-lock.json
+          node-version: 26
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('DevilConnection_ModManager/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install mod manager dependencies
         working-directory: DevilConnection_ModManager
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build mod manager
         working-directory: DevilConnection_ModManager
-        run: npm run build
+        run: pnpm run build
 
       - name: Add mod manager to app
         run: |
           mv DevilConnection_ModManager/dist app/ui
 
-      - name: Install asar
-        run: npm install --global asar
-
       - name: Package app
         run: >-
-          asar pack app app.asar
+          pnpm dlx asar pack app app.asar
           --unpack "**/node_modules/steamworks.js/**/*.{node,dll,so,dylib}"
 
       - name: Create GitHub release
