@@ -32,7 +32,6 @@ const SAVE_IMPORT_DIR_KEY = 'saveImportDir';
 
 const BACKUP_DIR = 'backups';
 const BACKUP_LOCK_FILE = 'backup_locks.json';
-const LEGACY_BACKUP_LOCK_FILE = 'backups.lock.json';
 const STORAGE_DIR = '_storage';
 const SAV_EXT = '.sav';
 
@@ -152,7 +151,6 @@ module.exports = {
 	SAVE_IMPORT_DIR_KEY,
 	BACKUP_DIR,
 	BACKUP_LOCK_FILE,
-	LEGACY_BACKUP_LOCK_FILE,
 	STORAGE_DIR,
 	SAV_EXT,
 	Env,
