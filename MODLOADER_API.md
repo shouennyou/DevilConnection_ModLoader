@@ -25,8 +25,7 @@ const api = window.modloader
 | 类别 | 方法 | 用途 |
 | --- | --- | --- |
 | 运行时信息 | `returnModLoaderDataPath` | 取得当前实际使用的可写数据根目录。 |
-| 文本文件 | `readFile`、`writeFile`、`appendFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本和 JSON 配置。 |
-| 二进制文件 | `readBuffer`、`writeBuffer` 及对应 `Sync` 方法 | 读写中小型二进制数据。 |
+| 文件读写 | `readFile`、`writeFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本、JSON 与中小型二进制数据。 |
 | 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
 | 文件查询 | `stat`、`readdir` 及对应 `Sync` 方法 | 查询路径类型和目录项。 |
 | 文件变更 | `rename`、`copyFile`、`rm` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
@@ -78,18 +77,26 @@ if (!result.success) {
 }
 ```
 
-## 文本文件
+## 文件读写
 
-文本按 UTF-8 读写. 写入和追加会自动创建父目录.
+`readFile` 默认按 UTF-8 返回字符串；传入 `{ encoding: null }` 时返回 `Uint8Array`。`writeFile` 接受字符串、`ArrayBuffer` 或 `Uint8Array`，默认覆盖写入；传入 `{ append: true }` 时追加内容。两种写入模式都会自动创建父目录。
 
 | 方法 | 参数 | 返回值 | 说明 |
 | --- | --- | --- | --- |
-| `readFileSync(path)` | `path: string` | `string \| null` | 同步读取文本. 路径不存在或读取失败时返回 `null`. |
-| `readFile(path)` | `path: string` | `Promise<string \| null>` | 异步读取文本. |
-| `writeFileSync(path, content)` | `path: string`, `content: string` | `FsResult` | 同步覆盖写入 UTF-8 文本. |
-| `writeFile(path, content)` | `path: string`, `content: string` | `Promise<FsResult>` | 异步覆盖写入 UTF-8 文本. |
-| `appendFileSync(path, content)` | `path: string`, `content: string` | `FsResult` | 同步追加 UTF-8 文本. |
-| `appendFile(path, content)` | `path: string`, `content: string` | `Promise<FsResult>` | 异步追加 UTF-8 文本. |
+| `readFileSync(path, options?)` | `path: string`, `options?: ReadOptions` | `string \| Uint8Array \| null` | 同步读取文本或二进制. |
+| `readFile(path, options?)` | `path: string`, `options?: ReadOptions` | `Promise<string \| Uint8Array \| null>` | 异步读取文本或二进制. |
+| `writeFileSync(path, content, options?)` | `path: string`, `content: string \| ArrayBuffer \| Uint8Array`, `options?: WriteOptions` | `FsResult` | 同步覆盖或追加写入. |
+| `writeFile(path, content, options?)` | `path: string`, `content: string \| ArrayBuffer \| Uint8Array`, `options?: WriteOptions` | `Promise<FsResult>` | 异步覆盖或追加写入. |
+
+```ts
+interface ReadOptions {
+  encoding?: 'utf8' | null // 默认 'utf8'；null 返回 Uint8Array
+}
+
+interface WriteOptions extends ReadOptions {
+  append?: boolean // 默认 false；true 时追加而非覆盖
+}
+```
 
 读取和保存 JSON 配置示例:
 
@@ -114,22 +121,11 @@ if (!result.success) {
 }
 ```
 
-## 二进制文件
-
-二进制接口适用于图片、音频、压缩包等中小型文件. 大文件应使用下方的流式接口.
-
-| 方法 | 参数 | 返回值 | 说明 |
-| --- | --- | --- | --- |
-| `readBufferSync(path)` | `path: string` | `Uint8Array \| null` | 同步读取完整二进制文件. |
-| `readBuffer(path)` | `path: string` | `Promise<Uint8Array \| null>` | 异步读取完整二进制文件. |
-| `writeBufferSync(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `FsResult` | 同步覆盖写入二进制文件. |
-| `writeBuffer(path, buffer)` | `path: string`, `buffer: ArrayBuffer \| Uint8Array` | `Promise<FsResult>` | 异步覆盖写入二进制文件. |
-
 ```js
 const api = window.modloader
 const response = await fetch('https://example.com/assets/icon.png')
 const buffer = await response.arrayBuffer()
-const result = await api.writeBuffer('config/example-complete-mod/icon.png', buffer)
+const result = await api.writeFile('config/example-complete-mod/icon.png', buffer, { encoding: null })
 
 if (!result.success) {
   console.error('[完整示例模组] 图片写入失败:', result.error)
