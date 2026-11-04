@@ -20,7 +20,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-modmanager
@@ -139,6 +139,8 @@ jobs:
   publish:
     needs: package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out mod loader
         uses: actions/checkout@v7
