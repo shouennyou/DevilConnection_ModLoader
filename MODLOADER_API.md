@@ -28,8 +28,8 @@ const api = window.modloader
 | 文本文件 | `readFile`、`writeFile`、`appendFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本和 JSON 配置。 |
 | 二进制文件 | `readBuffer`、`writeBuffer` 及对应 `Sync` 方法 | 读写中小型二进制数据。 |
 | 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
-| 文件查询 | `stat`、`readdir` 及对应 `Sync` 方法 | 查询路径类型和目录项。 |
-| 文件变更 | `rename`、`copyFile`、`unlink`、`rmdir` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
+| 文件查询 | `stat`、`getSize`、`readdir`、`exists` 及对应 `Sync` 方法 | 查询路径类型、大小、目录项和是否存在。 |
+| 文件变更 | `mkdir`、`rename`、`copyFile`、`unlink`、`rmdir` 及对应 `Sync` 方法 | 创建、移动、复制或删除文件与目录。 |
 
 除 `returnModLoaderDataPath()` 外，本接口所有路径参数均遵循下方的“路径规则”。
 
@@ -51,7 +51,7 @@ const api = window.modloader
 
 - 不要使用绝对路径.
 - 路径不能包含 NUL 字符或越出允许根目录的 `..`.
-- `stat` 和 `readdir` 可以传入空字符串以查询 `resources` 根目录. 其余方法必须传入根目录下的目标路径.
+- `stat`、`getSize`、`readdir` 和 `exists` 可以传入空字符串以查询 `resources` 根目录. 其余方法必须传入根目录下的目标路径.
 - 接口不按模组隔离文件权限. 请仅读写自己使用的 `config/<模组 ID>.json` 或 `config/<模组 ID>/` 路径, 不要修改 `app.asar`、其他模组文件或 `config/mod_order.json`.
 
 ## 通用结果格式
@@ -219,8 +219,14 @@ try {
 | --- | --- | --- | --- |
 | `statSync(path)` | `path: string` | `FileStat \| null` | 同步读取文件或目录状态. |
 | `stat(path)` | `path: string` | `Promise<FileStat \| null>` | 异步读取文件或目录状态. |
+| `getSizeSync(path)` | `path: string` | `number \| null` | 同步获取字节大小. 目录会递归计算所有子项. |
+| `getSize(path)` | `path: string` | `Promise<number \| null>` | 异步获取字节大小. |
 | `readdirSync(path)` | `path: string` | `string[] \| null` | 同步读取目录项名称, 不含完整路径. |
 | `readdir(path)` | `path: string` | `Promise<string[] \| null>` | 异步读取目录项名称. |
+| `existsSync(path)` | `path: string` | `boolean` | 同步判断文件或目录是否存在. |
+| `exists(path)` | `path: string` | `Promise<boolean>` | 异步判断文件或目录是否存在. |
+| `mkdirSync(path)` | `path: string` | `FsResult` | 同步递归创建目录. |
+| `mkdir(path)` | `path: string` | `Promise<FsResult>` | 异步递归创建目录. |
 | `renameSync(oldPath, newPath)` | `oldPath: string`, `newPath: string` | `FsResult` | 同步重命名或移动, 自动创建目标父目录. |
 | `rename(oldPath, newPath)` | `oldPath: string`, `newPath: string` | `Promise<FsResult>` | 异步重命名或移动. |
 | `copyFileSync(sourcePath, targetPath)` | `sourcePath: string`, `targetPath: string` | `FsResult` | 同步复制文件, 自动创建目标父目录. |
