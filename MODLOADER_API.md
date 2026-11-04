@@ -74,8 +74,6 @@ const original = await window.modloader.readFile('original-game-resources/index.
 
 `readdir('game-resources/目录')` 返回合并后的目录视图；同名目录项由较高优先级的模组获胜。两个虚拟根依赖模组管理器中已选定的游戏核心 ASAR；未配置核心时，原始视图及未被模组命中的覆盖视图返回 `null`。
 
-当虚拟根可用时，`readdir('')` 和 `readdirSync('')` 会在 `resources` 根目录的结果中列出它。`game-resources` 在存在已加载资源来源时出现；`original-game-resources` 仅在已选定有效游戏核心时出现。两个名称均为保留名称，`stat*('game-resources')` 与 `stat*('original-game-resources')` 会返回只读虚拟目录状态。
-
 ## 通用结果格式
 
 写入、删除、创建和复制操作返回 `FsResult`:
