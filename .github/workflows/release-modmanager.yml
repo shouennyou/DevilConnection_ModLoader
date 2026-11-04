@@ -20,7 +20,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-modmanager
@@ -33,7 +33,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
 
@@ -67,12 +67,12 @@ jobs:
           path: DevilConnection_ModManager
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v7
         with:
           version: 12.6.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -87,7 +87,7 @@ jobs:
         run: pnpm run build
 
       - name: Upload mod manager UI
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: modmanager-ui
           path: DevilConnection_ModManager/dist
@@ -106,19 +106,19 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v7
         with:
           version: 12.6.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Download mod manager UI
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: modmanager-ui
           path: app/ui
@@ -130,7 +130,7 @@ jobs:
         run: pnpm run ${{ matrix.command }} -- --publish never
 
       - name: Upload packages
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.files }}
@@ -139,6 +139,8 @@ jobs:
   publish:
     needs: package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -146,12 +148,12 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v7
         with:
           version: 12.6.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -162,21 +164,21 @@ jobs:
 
       - name: Download Windows packages
         if: ${{ inputs.build_windows }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: modmanager-windows
           path: release/windows
 
       - name: Download Linux packages
         if: ${{ inputs.build_linux }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: modmanager-linux
           path: release/linux
 
       - name: Download macOS packages
         if: ${{ inputs.build_macos }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: modmanager-macos
           path: release/macos
