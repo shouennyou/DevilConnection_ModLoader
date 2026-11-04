@@ -20,7 +20,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: release-modmanager
@@ -139,10 +139,6 @@ jobs:
   publish:
     needs: package
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    # `github.token` is the run-scoped token issued by GitHub Actions. Keep it
-    # at job scope so every electron-builder publish invocation inherits it.
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
