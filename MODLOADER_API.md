@@ -29,7 +29,7 @@ const api = window.modloader
 | 二进制文件 | `readBuffer`、`writeBuffer` 及对应 `Sync` 方法 | 读写中小型二进制数据。 |
 | 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
 | 文件查询 | `stat`、`readdir` 及对应 `Sync` 方法 | 查询路径类型和目录项。 |
-| 文件变更 | `rename`、`copyFile`、`unlink`、`rmdir` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
+| 文件变更 | `rename`、`copyFile`、`rm` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
 
 除 `returnModLoaderDataPath()` 外，本接口所有路径参数均遵循下方的“路径规则”。
 
@@ -225,10 +225,15 @@ try {
 | `rename(oldPath, newPath)` | `oldPath: string`, `newPath: string` | `Promise<FsResult>` | 异步重命名或移动. |
 | `copyFileSync(sourcePath, targetPath)` | `sourcePath: string`, `targetPath: string` | `FsResult` | 同步复制文件, 自动创建目标父目录. |
 | `copyFile(sourcePath, targetPath)` | `sourcePath: string`, `targetPath: string` | `Promise<FsResult>` | 异步复制文件. |
-| `unlinkSync(path)` | `path: string` | `FsResult` | 同步删除单个文件. 文件不存在会返回失败. |
-| `unlink(path)` | `path: string` | `Promise<FsResult>` | 异步删除单个文件. |
-| `rmdirSync(path)` | `path: string` | `FsResult` | 同步递归删除目录. 目录不存在也视为成功. |
-| `rmdir(path)` | `path: string` | `Promise<FsResult>` | 异步递归删除目录. |
+| `rmSync(path, options?)` | `path: string`, `options?: RmOptions` | `FsResult` | 同步删除文件或目录. |
+| `rm(path, options?)` | `path: string`, `options?: RmOptions` | `Promise<FsResult>` | 异步删除文件或目录. |
+
+```ts
+interface RmOptions {
+  recursive?: boolean // 默认 false；删除非空目录时必须为 true
+  force?: boolean // 默认 false；为 true 时路径不存在仍返回 success
+}
+```
 
 `FileStat` 的类型判定方法与常用数据字段如下:
 
@@ -263,6 +268,6 @@ interface FileStat {
 
 - 文本配置优先放在 `config/<模组 ID>.json`, 结构化数据使用 `JSON.stringify(data, null, 2)` 保存.
 - 大于数 MiB 的文件使用流式接口, 避免一次性占用大量渲染进程内存.
-- 删除和覆盖写入前先检查路径, `rmdir` 会递归删除整个目录.
+- 删除前确认路径和 `rm` 选项；`rm(path, { recursive: true, force: true })` 会递归删除目录，且路径不存在也视为成功.
 - 不要把会话 ID 保存到配置文件. 它只在当前游戏窗口存活期间有效.
 - 若 ModLoader 未注入或在非游戏窗口执行脚本, `window.modloader` 可能不存在, 调用前应进行存在性检查.
