@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
-const { Env, Logger, PluginManager } = require('./core');
+const { Env, Logger, PluginManager, electronFs } = require('./core');
 
 let originalFs = fs;
 try {
@@ -374,7 +374,10 @@ const ModLoaderApi = {
 		const target = resolveReadablePath(this.resourcesPath, relative);
 		if (!target) return null;
 		try {
-			return fs.readFileSync(target.fullPath, normalizeReadOptions(options));
+			// fs.readFileSync 会被 hooks.js 替换为按模组优先级重新路由的版本。
+			// 路径已在 resolveReadablePath 中决定；此处必须使用 Hook 前保存的
+			// Electron fs，避免 original-game-resources 被再次解析为模组覆盖资源。
+			return electronFs.readFileSync(target.fullPath, normalizeReadOptions(options));
 		} catch (error) {
 			if (isPathNotFoundError(error)) return null;
 			Logger.error(`同步读取文件失败: ${target.fullPath}`, error);
