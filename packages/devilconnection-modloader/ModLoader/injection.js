@@ -118,6 +118,24 @@ const BUILTIN_HOOK_WORKER = `
 		return p;
 	}
 
+	/**
+	 * 将 app.asar 内的资源路径转换为 ModLoader 的只读虚拟资源目录。
+	 * 这样既会按模组优先级读取覆盖文件，也会在未覆盖时回退到游戏核心。
+	 */
+	function resolveReadablePath(filePath) {
+		const normalized = filePath.replace(/\\\\/g, '/');
+		const marker = '/app.asar/';
+		const markerIndex = normalized.toLowerCase().lastIndexOf(marker);
+		if (markerIndex === -1) return filePath;
+
+		const relative = normalized.slice(markerIndex + marker.length);
+		const segments = relative.split('/');
+		if (!relative || segments.some(segment => !segment || segment === '.' || segment === '..')) {
+			return filePath;
+		}
+		return 'game-resources/' + relative;
+	}
+
 	window.Worker = function(url, options) {
 		const rawUrl = String(url);
 
@@ -125,7 +143,7 @@ const BUILTIN_HOOK_WORKER = `
 
 		try {
 			const filePath = resolveFilePath(new URL(rawUrl, location.href));
-			const code = window.modloader.readFileSync(filePath);
+			const code = window.modloader.readFileSync(resolveReadablePath(filePath));
 			if (code == null) return new OrigWorker(url, options);
 			return new OrigWorker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })), options);
 		} catch (error) {
