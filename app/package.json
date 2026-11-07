@@ -1,7 +1,7 @@
 {
   "name": "devilconnection_modloader",
   "desktopName": "devilconnection_modloader",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "恶魔连结模组加载器",
   "keywords": [
     "devil-connection",
@@ -26,6 +26,7 @@
     "@electron/asar": "^4.3.1",
     "adm-zip": "^0.6.1",
     "fs-extra": "^11.4.1",
-    "steamworks.js": "^0.4.0"
+    "steamworks.js": "^0.4.0",
+	"@sanity/diff-match-patch": "^3.2.1"
   }
 }
