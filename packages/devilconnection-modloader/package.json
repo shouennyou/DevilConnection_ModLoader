@@ -12,7 +12,8 @@
   ],
   "dependencies": {
     "@electron/asar": "^4.3.1",
-    "adm-zip": ">=0.5.16"
+    "adm-zip": ">=0.5.16",
+	"@sanity/diff-match-patch": "^3.2.1"
   },
   "engines": {
     "node": ">=22.12.0"
