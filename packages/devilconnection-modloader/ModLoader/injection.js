@@ -109,7 +109,7 @@ const BUILTIN_HOOK_WORKER = `
 	function shouldIntercept(url) {
 		if (/^(blob:|data:|https?:)/i.test(url)) return false;
 		const abs = new URL(url, location.href);
-		return abs.protocol === 'file:';
+		return abs.protocol === 'file:' || (abs.protocol === 'modloader:' && abs.hostname === 'game');
 	}
 
 	function resolveFilePath(abs) {
@@ -122,7 +122,17 @@ const BUILTIN_HOOK_WORKER = `
 	 * 将 app.asar 内的资源路径转换为 ModLoader 的只读虚拟资源目录。
 	 * 这样既会按模组优先级读取覆盖文件，也会在未覆盖时回退到游戏核心。
 	 */
-	function resolveReadablePath(filePath) {
+	function resolveReadablePath(abs) {
+		if (abs.protocol === 'modloader:' && abs.hostname === 'game') {
+			const relative = decodeURIComponent(abs.pathname).replace(/^\\/+/, '');
+			const segments = relative.split('/');
+			if (!relative || segments.some(segment => !segment || segment === '.' || segment === '..' || segment.includes('\\\\'))) {
+				return null;
+			}
+			return 'game-resources/' + segments.join('/');
+		}
+
+		const filePath = resolveFilePath(abs);
 		const normalized = filePath.replace(/\\\\/g, '/');
 		const marker = '/app.asar/';
 		const markerIndex = normalized.toLowerCase().lastIndexOf(marker);
@@ -142,8 +152,10 @@ const BUILTIN_HOOK_WORKER = `
 		if (!shouldIntercept(rawUrl)) return new OrigWorker(url, options);
 
 		try {
-			const filePath = resolveFilePath(new URL(rawUrl, location.href));
-			const code = window.modloader.readFileSync(resolveReadablePath(filePath));
+			const abs = new URL(rawUrl, location.href);
+			const readablePath = resolveReadablePath(abs);
+			if (!readablePath) return new OrigWorker(url, options);
+			const code = window.modloader.readFileSync(readablePath);
 			if (code == null) return new OrigWorker(url, options);
 			return new OrigWorker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })), options);
 		} catch (error) {

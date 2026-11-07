@@ -7,10 +7,15 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { pathToFileURL } = require('url');
 const { parsePatch, applyPatches } = require('@sanity/diff-match-patch');
 const electron = require('electron');
 
 let core;
+const MODLOADER_SCHEME = 'modloader';
+const MODLOADER_HOST = 'game';
+const MEMORY_PROTOCOL_MODE = 'memory';
+const FILE_CACHE_PROTOCOL_MODE = 'file-cache';
 const PATCHABLE_EXTENSIONS = new Set([
 	'.js', '.mjs', '.ts', '.html', '.css', '.ks', '.tjs',
 	'.json', '.md', '.txt'
@@ -20,6 +25,32 @@ const PATCH_CACHE_DIR = 'cache/patches';
 const PATCH_CACHE_INDEX = 'cache/patches.json';
 
 let patchCacheIndex = null;
+let schemeRegistered = false;
+
+/**
+ * 必须在 app ready 前调用；即使当前使用 file-cache 模式也可安全预注册。
+ */
+function registerProtocolScheme() {
+	const { app, protocol } = electron;
+	if (schemeRegistered) return true;
+	if (app.isReady()) {
+		console.error('[ModLoader] modloader 协议必须在 app ready 前注册');
+		return false;
+	}
+
+	protocol.registerSchemesAsPrivileged([{
+		scheme: MODLOADER_SCHEME,
+		privileges: {
+			standard: true,
+			secure: true,
+			supportFetchAPI: true,
+			corsEnabled: true,
+			stream: true
+		}
+	}]);
+	schemeRegistered = true;
+	return true;
+}
 
 /**
  * 从 targetPath 提取相对于 app.asar 的路径.
@@ -59,6 +90,18 @@ function applyFSHooks() {
 	core.Logger.info('文件系统拦截已启用');
 }
 
+function getResourceProtocolMode() {
+	try {
+		const configPath = path.join(core.Env.getDataPath(), 'config', 'mod-manager.json');
+		const config = JSON.parse(core.electronFs.readFileSync(configPath, 'utf-8'));
+		return config?.resourceProtocolMode === MEMORY_PROTOCOL_MODE
+			? MEMORY_PROTOCOL_MODE
+			: FILE_CACHE_PROTOCOL_MODE;
+	} catch (error) {
+		return FILE_CACHE_PROTOCOL_MODE;
+	}
+}
+
 function normalizeRelative(relative) {
 	if (typeof relative !== 'string') return null;
 	const normalized = relative.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -67,6 +110,16 @@ function normalizeRelative(relative) {
 		return null;
 	}
 	return segments.join('/');
+}
+
+function getResourcePath(requestUrl) {
+	try {
+		const url = new URL(requestUrl);
+		if (url.protocol !== `${MODLOADER_SCHEME}:` || url.hostname !== MODLOADER_HOST) return null;
+		return normalizeRelative(decodeURIComponent(url.pathname));
+	} catch (error) {
+		return null;
+	}
 }
 
 /** 返回资源对应的同名补丁路径，例如 tyrano/libs/apng.js.patch。 */
@@ -235,13 +288,21 @@ function cachePatchedResource(relative, text) {
 	}
 }
 
-function setupProtocol() {
-	const {
-		app,
-		protocol
-	} = electron;
-	const register = () => {
-		protocol.interceptFileProtocol('file', (req, callback) => {
+function getContentType(relative) {
+	switch (path.posix.extname(relative).toLowerCase()) {
+		case '.html': return 'text/html; charset=utf-8';
+		case '.js':
+		case '.mjs': return 'text/javascript; charset=utf-8';
+		case '.ts': return 'application/typescript; charset=utf-8';
+		case '.css': return 'text/css; charset=utf-8';
+		case '.json': return 'application/json; charset=utf-8';
+		case '.md': return 'text/markdown; charset=utf-8';
+		default: return 'text/plain; charset=utf-8';
+	}
+}
+
+function setupFileCacheProtocol(protocol) {
+	protocol.interceptFileProtocol('file', (req, callback) => {
 			let url = req.url.substr(8);
 			url = decodeURIComponent(url);
 			const q = url.indexOf('?');
@@ -265,7 +326,46 @@ function setupProtocol() {
 				path: found || path.normalize(url)
 			});
 		});
-		core.Logger.info('协议拦截已启用');
+	core.Logger.info('file 协议拦截已启用（补丁缓存模式）');
+}
+
+function setupMemoryProtocol(protocol, net) {
+	if (!schemeRegistered) throw new Error('modloader 协议未在 app ready 前注册');
+
+	protocol.handle(MODLOADER_SCHEME, async (request) => {
+		const relative = getResourcePath(request.url);
+		if (!relative) return new Response('Not Found', { status: 404 });
+
+		let patched = PATCHED_RESOURCE_CACHE.get(relative);
+		if (patched === undefined) {
+			const text = buildPatchedResource(relative);
+			patched = text === null ? null : { text, contentType: getContentType(relative) };
+			PATCHED_RESOURCE_CACHE.set(relative, patched);
+		}
+		if (patched) {
+			return new Response(patched.text, {
+				headers: { 'content-type': patched.contentType }
+			});
+		}
+
+		const resolved = core.PluginManager.resolvePath(relative);
+		if (!resolved) return new Response('Not Found', { status: 404 });
+
+		// 未修改资源由原生 file: 加载器返回，保留 ASAR、MIME、Range 和媒体流支持。
+		return net.fetch(pathToFileURL(resolved).toString(), {
+			method: request.method,
+			headers: request.headers
+		});
+	});
+	core.Logger.info('modloader 协议处理器已启用（内存补丁模式）');
+}
+
+function setupProtocol() {
+	const { app, protocol, net } = electron;
+	const register = () => {
+		PATCHED_RESOURCE_CACHE.clear();
+		if (getResourceProtocolMode() === MEMORY_PROTOCOL_MODE) setupMemoryProtocol(protocol, net);
+		else setupFileCacheProtocol(protocol);
 	};
 
 	if (app.isReady()) register();
@@ -279,5 +379,7 @@ function init(dependencies) {
 module.exports = {
 	init,
 	applyFSHooks,
-	setupProtocol
+	setupProtocol,
+	registerProtocolScheme,
+	getResourceProtocolMode
 };

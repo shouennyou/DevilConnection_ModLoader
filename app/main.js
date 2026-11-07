@@ -115,6 +115,23 @@ function isDebugModeEnabled() {
 	}
 }
 
+function getResourceProtocolMode() {
+	try {
+		const resourcesPath = path.normalize(process.resourcesPath || process.cwd());
+		const configPath = join(getConfigDataPath(resourcesPath), 'config', 'mod-manager.json');
+		const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+		return config?.resourceProtocolMode === 'memory' ? 'memory' : 'file-cache';
+	} catch (error) {
+		return 'file-cache';
+	}
+}
+
+function getGameEntryUrl() {
+	return getResourceProtocolMode() === 'memory'
+		? 'modloader://game/index.html'
+		: url('file', './index.html');
+}
+
 async function triggerScreenshot(x, y, width, height) {
 	const screenshot = await mainWindow.capturePage({
 		'x': x,
@@ -173,7 +190,7 @@ function createMainWindow() {
 		mainWindow = null;
 		return null;
 	}
-	mainWindow.loadURL(url('file', './index.html'));
+	mainWindow.loadURL(getGameEntryUrl());
 	if (isDebugModeEnabled()) {
 		mainWindow.webContents.openDevTools();
 	}

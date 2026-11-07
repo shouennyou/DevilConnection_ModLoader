@@ -3,6 +3,10 @@
 const { ModManagerApi } = require('../ModManager/api');
 const { ModLoaderApi } = require('../ModLoader/api');
 const { Env: ModLoaderEnv } = require('../ModLoader/core');
+const { registerProtocolScheme } = require('../ModLoader/hooks');
+
+// 主入口在 app ready 前加载本模块；内存模式所需的特权协议必须在此阶段声明。
+registerProtocolScheme();
 
 /** 初始化单实例限制, 窗口快捷键和模组管理器目录. */
 function initExtra() {
