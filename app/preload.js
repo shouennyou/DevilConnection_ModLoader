@@ -32,7 +32,8 @@ contextBridge.exposeInMainWorld('api', {
 	},
 	//__dirname
 	returnDirName: () => {
-		return __dirname
+		// return __dirname
+		return ipcRenderer.sendSync('getAppPath')
 	},
 
 	//二重起動確認用
