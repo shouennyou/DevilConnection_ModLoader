@@ -173,7 +173,7 @@ function createMainWindow() {
 		mainWindow = null;
 		return null;
 	}
-	mainWindow.loadURL(url('file', './index.html'));
+	mainWindow.loadURL('modloader://game/index.html');
 	if (isDebugModeEnabled()) {
 		mainWindow.webContents.openDevTools();
 	}
