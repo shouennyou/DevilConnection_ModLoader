@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const { applyStandardDiff } = require('apply-multi-diff-patch');
 const { parsePatch, applyPatches } = require('@sanity/diff-match-patch');
 const electron = require('electron');
 
@@ -202,7 +203,21 @@ function buildPatchedResource(relative) {
 		}
 
 		try {
-			const { patches, options } = parsePatchDocument(core.electronFs.readFileSync(patchPath, 'utf-8'));
+			const document = normalizePatchText(core.electronFs.readFileSync(patchPath, 'utf-8'));
+			if (/^(?:Index: .*\n=+\n)?--- [^\n]*\n\+\+\+ /m.test(document)) {
+				const files = require('diff').parsePatch(document);
+				if (files.length !== 1 || files[0].hunks.length === 0) {
+					throw new Error('Unified diff 必须包含单个文件和至少一个修改片段');
+				}
+				const result = applyStandardDiff(text, document);
+				if (!result.success) {
+					core.Logger.warn(`跳过 Unified diff 补丁: ${patchPath} (${result.error.code}: ${result.error.message})`);
+					continue;
+				}
+				text = result.content;
+				continue;
+			}
+			const { patches, options } = parsePatchDocument(document);
 			const [nextText, applied] = applyPatches(patches, text, options);
 			if (!applied.every(Boolean)) {
 				core.Logger.warn(`跳过补丁（上下文不匹配）: ${patchPath}`);

@@ -97,6 +97,7 @@
   },
   "devDependencies": {
     "devilconnection-modloader": "file:packages/devilconnection-modloader",
+	"apply-multi-diff-patch": "file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz",
     "electron": "^45.2.2",
     "electron-builder": "^26.18.0"
   },
