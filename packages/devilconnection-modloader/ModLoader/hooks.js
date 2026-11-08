@@ -158,9 +158,10 @@ function parsePatchDocument(patchText) {
 		try {
 			const config = JSON.parse(header[1]);
 			const margin = clampNumber(config?.margin, 1, 15);
-			const deleteThreshold = clampNumber(config?.deleteThreshold, 0.01, 1);
+			const deleteThreshold = clampNumber(config?.deleteThreshold, 0, 1);
 			if (margin !== null) options.margin = margin;
-			if (deleteThreshold !== null) options.deleteThreshold = deleteThreshold;
+			// Sanity DMP treats 0 as its default threshold; use the smallest positive value for strict matching.
+			if (deleteThreshold !== null) options.deleteThreshold = deleteThreshold === 0 ? Number.MIN_VALUE : deleteThreshold;
 		} catch (error) {
 			core.Logger.warn('PatchWeaver 补丁配置无效，使用默认应用策略', error);
 		}
