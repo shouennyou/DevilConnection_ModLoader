@@ -7,9 +7,11 @@
 const core = require('./core');
 const hooks = require('./hooks');
 const injection = require('./injection');
+const patchReport = require('./patch-report');
 
 hooks.init(core);
 injection.init(core);
+patchReport.init(core);
 
 let runtimeInitialized = false;
 let injectionEnabled = false;
@@ -62,13 +64,15 @@ function initializeRuntime() {
  * @returns {boolean}
  */
 function start(targetWindow) {
+	if (core.Env.isMain) patchReport.startSession();
 	if (!initializeRuntime()) return false;
 	if (core.Env.isMain) injectIntoTargetWindow(targetWindow);
 	return true;
 }
 
 module.exports = {
-	start
+	start,
+	setPatchFailureReporter: patchReport.setFailureReporter
 };
 
 // 游戏 preload 初始化渲染进程侧文件 Hook, 管理器 preload 不加载本入口.

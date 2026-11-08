@@ -11,6 +11,7 @@ const { pathToFileURL } = require('url');
 const { applyStandardDiff } = require('apply-multi-diff-patch');
 const { parsePatch, applyPatches } = require('@sanity/diff-match-patch');
 const electron = require('electron');
+const patchReport = require('./patch-report');
 
 let core;
 const MODLOADER_SCHEME = 'modloader';
@@ -198,6 +199,14 @@ function buildPatchedResource(relative) {
 		const patchPath = getLayerPath(layer, patchRelative);
 		if (!fs.existsSync(patchPath)) continue;
 		if (!hasSource) {
+			patchReport.recordFailure({
+				layerPath: layer,
+				patchPath,
+				targetPath: relative,
+				format: 'unknown',
+				code: 'missing-base-file',
+				message: '找不到补丁所需的基础文件'
+			});
 			core.Logger.warn(`跳过补丁（缺少基础文件）: ${patchPath}`);
 			continue;
 		}
@@ -211,20 +220,49 @@ function buildPatchedResource(relative) {
 				}
 				const result = applyStandardDiff(text, document);
 				if (!result.success) {
+					patchReport.recordFailure({
+						layerPath: layer,
+						patchPath,
+						targetPath: relative,
+						format: 'unified',
+						code: 'unified-apply-failed',
+						message: 'Unified diff 无法应用到当前文件',
+						detail: `${result.error.code}: ${result.error.message}`
+					});
 					core.Logger.warn(`跳过 Unified diff 补丁: ${patchPath} (${result.error.code}: ${result.error.message})`);
 					continue;
 				}
 				text = result.content;
+				patchReport.recordApplied({ layerPath: layer, patchPath, targetPath: relative, format: 'unified' });
 				continue;
 			}
 			const { patches, options } = parsePatchDocument(document);
 			const [nextText, applied] = applyPatches(patches, text, options);
 			if (!applied.every(Boolean)) {
+				patchReport.recordFailure({
+					layerPath: layer,
+					patchPath,
+					targetPath: relative,
+					format: 'dmp',
+					code: 'context-mismatch',
+					message: '补丁上下文与当前文件不匹配',
+					detail: `${applied.filter(Boolean).length}/${applied.length} 个修改片段匹配成功`
+				});
 				core.Logger.warn(`跳过补丁（上下文不匹配）: ${patchPath}`);
 				continue;
 			}
 			text = nextText;
+			patchReport.recordApplied({ layerPath: layer, patchPath, targetPath: relative, format: 'dmp' });
 		} catch (error) {
+			patchReport.recordFailure({
+				layerPath: layer,
+				patchPath,
+				targetPath: relative,
+				format: 'unknown',
+				code: 'apply-error',
+				message: '读取、解析或应用补丁时发生错误',
+				detail: error?.message || String(error)
+			});
 			core.Logger.warn(`应用补丁失败: ${patchPath}`, error);
 		}
 	}

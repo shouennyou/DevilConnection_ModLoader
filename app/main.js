@@ -10,6 +10,7 @@ let modLoaderEntry = null;
 function loadModLoader(targetWindow) {
 	try {
 		modLoaderEntry ??= require('devilconnection-modloader/ModLoader/index');
+		modLoaderEntry.setPatchFailureReporter?.(reportPatchFailure);
 		return modLoaderEntry.start(targetWindow);
 	} catch (e) {
 		console.error('[ModLoader] 加载失败:', e);
@@ -91,9 +92,16 @@ const MANAGER_WINDOW_SIZE = {
 	'minWidth': 960,
 	'minHeight': 640
 };
+const PATCH_ERROR_WINDOW_SIZE = {
+	'width': 760,
+	'height': 560,
+	'minWidth': 560,
+	'minHeight': 380
+};
 
 let mainWindow = null;
 let managerWindow = null;
+let patchErrorWindow = null;
 app.commandLine.appendSwitch('js-flags', '--expose-gc');
 
 const scSize = {
@@ -201,6 +209,7 @@ function createMainWindow() {
 		mainWindow.webContents.send('asynchronous-message', 'closeWindow');
 	});
 	mainWindow.on('closed', () => {
+		if (patchErrorWindow && !patchErrorWindow.isDestroyed()) patchErrorWindow.close();
 		mainWindow = null;
 	});
 	return mainWindow;
@@ -220,6 +229,37 @@ function createManagerWindow() {
 		managerWindow = null;
 	});
 	return managerWindow;
+}
+
+/** 报告渲染页面轮询 cache/patch-report.json, 以读取后续追加的失败记录. */
+function createPatchErrorWindow() {
+	if (patchErrorWindow && !patchErrorWindow.isDestroyed()) {
+		if (patchErrorWindow.isMinimized()) patchErrorWindow.restore();
+		patchErrorWindow.showInactive();
+		return patchErrorWindow;
+	}
+
+	patchErrorWindow = new BrowserWindow({
+		...createWindowOptions('preload-manager.js', PATCH_ERROR_WINDOW_SIZE, MANAGER_PARTITION),
+		parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+		modal: false,
+		show: false,
+		title: '补丁错误日志'
+	});
+	patchErrorWindow.loadURL(`${url('file', './ui/index.html')}#/patch-errors`);
+	patchErrorWindow.removeMenu();
+	patchErrorWindow.once('ready-to-show', () => {
+		if (patchErrorWindow && !patchErrorWindow.isDestroyed()) patchErrorWindow.showInactive();
+	});
+	patchErrorWindow.on('closed', () => {
+		patchErrorWindow = null;
+	});
+	return patchErrorWindow;
+}
+
+function reportPatchFailure(failure) {
+	console.warn(`[ModLoader] 补丁未应用: ${failure.modName}/${failure.patchPath} (${failure.code})`);
+	if (app.isReady()) createPatchErrorWindow();
 }
 
 app.on('ready', () => {
