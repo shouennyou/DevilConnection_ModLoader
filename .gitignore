@@ -3,3 +3,4 @@ app/ui
 node_modules
 
 release
+pnpm-lock.yaml
