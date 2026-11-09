@@ -206,6 +206,12 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
+  apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz:
+    resolution: {integrity: sha512-otrucQ/8nBz8NJ92kolCyhLLM2jN+1q6jWOXL6c5JmMC+bujLlEpAKuqFQHO+yGNX2oHNRKdMPVNrc3YY/3F0A==, tarball: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz}
+    version: 0.1.4-patch.2
+    peerDependencies:
+      typescript: ^5.0.0
+
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
 
@@ -1374,6 +1380,10 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
+  apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz(typescript@5.9.3):
+    dependencies:
+      typescript: 5.9.3
+
   argparse@2.0.1: {}
 
   asn1js@3.1.0:
@@ -1552,7 +1562,7 @@ snapshots:
       '@electron/asar': 4.3.1
       '@sanity/diff-match-patch': 3.2.1
       adm-zip: 0.6.1
-      apply-multi-diff-patch: file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz(typescript@5.9.3)
+      apply-multi-diff-patch: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz(typescript@5.9.3)
       diff: 9.0.0
     transitivePeerDependencies:
       - typescript
