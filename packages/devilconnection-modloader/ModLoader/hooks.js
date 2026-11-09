@@ -171,6 +171,27 @@ function parsePatchDocument(patchText) {
 	return { patches: parsePatch(documentText), options };
 }
 
+function parseUnifiedDocument(document) {
+	const header = /^# patch-weaver: ([^\n]+)\n/.exec(document);
+	if (!header) return { document, options: {} };
+
+	const config = JSON.parse(header[1]);
+	if (!config || typeof config !== 'object' || Array.isArray(config)) {
+		throw new Error('Unified diff 补丁配置无效');
+	}
+	const options = {};
+	for (const key of ['matchThreshold', 'deleteThreshold']) {
+		const value = config[key];
+		if (value !== undefined) {
+			if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+				throw new Error(`Unified diff ${key} 必须在 0 到 1 之间`);
+			}
+			options[key] = value;
+		}
+	}
+	return { document: document.slice(header[0].length), options };
+}
+
 /**
  * 按游戏核心、低优先级模组到高优先级模组的顺序构建文本。
  * 同一层内完整文件覆盖当前内容，随后才应用此层的同名补丁。
@@ -214,11 +235,12 @@ function buildPatchedResource(relative) {
 		try {
 			const document = normalizePatchText(core.electronFs.readFileSync(patchPath, 'utf-8'));
 			if (/^(?:Index: .*\n=+\n)?--- [^\n]*\n\+\+\+ /m.test(document)) {
-				const files = require('diff').parsePatch(document);
+				const unified = parseUnifiedDocument(document);
+				const files = require('diff').parsePatch(unified.document);
 				if (files.length !== 1 || files[0].hunks.length === 0) {
 					throw new Error('Unified diff 必须包含单个文件和至少一个修改片段');
 				}
-				const result = applyStandardDiff(text, document);
+				const result = applyStandardDiff(text, unified.document, unified.options);
 				if (!result.success) {
 					patchReport.recordFailure({
 						layerPath: layer,
