@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       apply-multi-diff-patch:
-        specifier: file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz
-        version: file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz(typescript@5.9.3)
+        specifier: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz
+        version: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz(typescript@5.9.3)
       devilconnection-modloader:
         specifier: file:packages/devilconnection-modloader
         version: file:packages/devilconnection-modloader(typescript@5.9.3)
