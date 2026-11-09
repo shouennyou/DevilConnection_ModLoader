@@ -28,7 +28,7 @@
     "fs-extra": "^11.4.1",
     "steamworks.js": "^0.4.0",
     "@sanity/diff-match-patch": "^3.2.1",
-    "apply-multi-diff-patch": "file:../packages/apply-multi-diff-patch-0.1.4-patch.1.tgz",
+    "apply-multi-diff-patch": "file:../packages/apply-multi-diff-patch-0.1.4-patch.2.tgz",
     "diff": "^9.0.0"
   }
 }

@@ -33,8 +33,8 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1
       apply-multi-diff-patch:
-        specifier: file:../packages/apply-multi-diff-patch-0.1.4-patch.1.tgz
-        version: file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz(typescript@5.9.3)
+        specifier: file:../packages/apply-multi-diff-patch-0.1.4-patch.2.tgz
+        version: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz(typescript@5.9.3)
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -199,12 +199,6 @@ packages:
     peerDependencies:
       dmg-builder: 26.18.0
       electron-builder-squirrel-windows: 26.18.0
-
-  apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz:
-    resolution: {integrity: sha512-TErKoZ6V612NQCBuHsaizF071C+FjBdoMpTLPZFvj68kIiaXTHKl88Qd3ZdYN+52AwzB7Ea1MUWVwnDpN3Fqdg==, tarball: file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz}
-    version: 0.1.4-patch.1
-    peerDependencies:
-      typescript: ^5.0.0
 
   apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz:
     resolution: {integrity: sha512-otrucQ/8nBz8NJ92kolCyhLLM2jN+1q6jWOXL6c5JmMC+bujLlEpAKuqFQHO+yGNX2oHNRKdMPVNrc3YY/3F0A==, tarball: file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz}
@@ -1375,10 +1369,6 @@ snapshots:
       which: 5.0.0
     transitivePeerDependencies:
       - supports-color
-
-  apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.1.tgz(typescript@5.9.3):
-    dependencies:
-      typescript: 5.9.3
 
   apply-multi-diff-patch@file:packages/apply-multi-diff-patch-0.1.4-patch.2.tgz(typescript@5.9.3):
     dependencies:
