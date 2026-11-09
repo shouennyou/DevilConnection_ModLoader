@@ -147,12 +147,12 @@ function clampNumber(value, min, max) {
 }
 
 /**
- * PatchWeaver 补丁可选地在首行携带 JSON 配置；旧式纯 DMP 补丁仍可正常读取。
+ * DMP 补丁可选地在首行携带 JSON 配置。
  * Sanity DMP 的 Bitap 上下文最多安全支持 15，较大的 margin 可能导致匹配无法结束。
  */
 function parsePatchDocument(patchText) {
 	patchText = normalizePatchText(patchText);
-	const header = /^# patch-weaver: ([^\r\n]+)\r?\n/.exec(patchText);
+	const header = /^# patch-config: ([^\r\n]+)\r?\n/.exec(patchText);
 	const options = {};
 	let documentText = patchText;
 	if (header) {
@@ -172,7 +172,7 @@ function parsePatchDocument(patchText) {
 }
 
 function parseUnifiedDocument(document) {
-	const header = /^# patch-weaver: ([^\n]+)\n/.exec(document);
+	const header = /^# patch-config: ([^\n]+)\n/.exec(document);
 	if (!header) return { document, options: {} };
 
 	const config = JSON.parse(header[1]);
