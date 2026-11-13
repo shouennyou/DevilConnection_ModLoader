@@ -23,6 +23,7 @@ const PATCHABLE_EXTENSIONS = new Set([
 	'.json', '.md', '.txt'
 ]);
 const PATCHED_RESOURCE_CACHE = new Map();
+const PATCHED_FS_CACHE = new Map();
 const PATCH_CACHE_DIR = 'cache/patches';
 const PATCH_CACHE_INDEX = 'cache/patches.json';
 
@@ -60,25 +61,18 @@ function registerProtocolScheme() {
 function extractRelative(targetPath) {
 	if (typeof targetPath !== 'string') return null;
 	const normalized = targetPath.replace(/\\/g, '/');
-	if (normalized.includes('app.asar')) {
-		return normalized.substring(normalized.indexOf('app.asar') + 8);
-	}
-	return null;
+	const match = /(?:^|\/)app\.asar(?=\/|$)/i.exec(normalized);
+	return match ? normalized.slice(match.index + match[0].length) : null;
 }
 
 /**
  * 映射 app.asar 路径或相对路径到已加载模组.
  */
 function mapPath(targetPath) {
-	const rel = extractRelative(targetPath);
-	if (rel) {
-		const found = core.PluginManager.resolvePath(rel);
-		if (found) return found;
-	}
-	if (!path.isAbsolute(targetPath)) {
-		let clean = targetPath.replace(/^(\.[/\\])/, '');
-		if (!clean.startsWith('/')) clean = '/' + clean;
-		const found = core.PluginManager.resolvePath(clean);
+	const candidate = extractRelative(targetPath) ?? (!path.isAbsolute(targetPath) ? targetPath : null);
+	if (candidate !== null) {
+		const relative = normalizeRelative(candidate, 'fs.readFileSync');
+		const found = relative && core.PluginManager.resolvePath(relative);
 		if (found) return found;
 	}
 	return targetPath;
@@ -87,7 +81,25 @@ function mapPath(targetPath) {
 function applyFSHooks() {
 	const orig = core.electronFs;
 
-	fs.readFileSync = (p, o) => orig.readFileSync(mapPath(p), o);
+	fs.readFileSync = (p, o) => {
+		// 保留文件描述符、URL 和非常规打开标志的原有行为。
+		const flag = o && typeof o === 'object' ? o.flag : undefined;
+		if (typeof p === 'string' && (flag === undefined || flag === 'r')) {
+			const candidate = extractRelative(p) ?? (!path.isAbsolute(p) ? p : null);
+			const relative = normalizeRelative(candidate, 'fs.readFileSync');
+			if (candidate !== null && !relative) return orig.readFileSync(p, o);
+			if (relative && getPatchPath(relative)) {
+				let patched = PATCHED_FS_CACHE.get(relative);
+				if (patched === undefined) {
+					const text = buildPatchedResource(relative);
+					patched = text === null ? null : cachePatchedResource(relative, text);
+					PATCHED_FS_CACHE.set(relative, patched);
+				}
+				if (patched) return orig.readFileSync(patched, o);
+			}
+		}
+		return orig.readFileSync(typeof p === 'string' ? mapPath(p) : p, o);
+	};
 
 	core.Logger.info('文件系统拦截已启用');
 }
@@ -104,11 +116,24 @@ function getResourceProtocolMode() {
 	}
 }
 
-function normalizeRelative(relative) {
+function normalizeRelative(relative, source) {
 	if (typeof relative !== 'string') return null;
-	const normalized = relative.replace(/\\/g, '/').replace(/^\/+/, '');
-	const segments = normalized.split('/');
-	if (!normalized || segments.some(segment => !segment || segment === '.' || segment === '..' || segment.includes('\0'))) {
+	const segments = [];
+	let reason = null;
+	for (const segment of relative.replace(/\\/g, '/').split('/')) {
+		if (!segment || segment === '.') continue;
+		if (segment.includes('\0')) { reason = '路径包含空字符'; break; }
+		if (segment === '..') {
+			if (!segments.length) { reason = '路径超出资源根目录'; break; }
+			segments.pop();
+		} else segments.push(segment);
+	}
+	if (!reason && !segments.length) reason = '路径没有资源名称';
+	if (reason) {
+		if (source) {
+			core.Logger.warn(`拒绝资源路径 (${source}): ${JSON.stringify(relative)} - ${reason}`);
+			patchReport.recordPathRejection({ source, path: relative, reason });
+		}
 		return null;
 	}
 	return segments.join('/');
@@ -118,8 +143,10 @@ function getResourcePath(requestUrl) {
 	try {
 		const url = new URL(requestUrl);
 		if (url.protocol !== `${MODLOADER_SCHEME}:` || url.hostname !== MODLOADER_HOST) return null;
-		return normalizeRelative(decodeURIComponent(url.pathname));
+		return normalizeRelative(decodeURIComponent(url.pathname), 'modloader protocol');
 	} catch (error) {
+		core.Logger.warn(`拒绝无效的 modloader 资源 URL: ${JSON.stringify(requestUrl)}`, error);
+		patchReport.recordPathRejection({ source: 'modloader protocol', path: requestUrl, reason: '无效的资源 URL 或编码' });
 		return null;
 	}
 }
@@ -380,11 +407,18 @@ function getContentType(relative) {
 function setupFileCacheProtocol(protocol) {
 	protocol.interceptFileProtocol('file', (req, callback) => {
 			let url = req.url.substr(8);
-			url = decodeURIComponent(url);
+			try {
+				url = decodeURIComponent(url);
+			} catch (error) {
+				core.Logger.warn(`拒绝无效的 file 资源 URL: ${JSON.stringify(req.url)}`, error);
+				patchReport.recordPathRejection({ source: 'file protocol', path: req.url, reason: '无效的 URL 编码' });
+				callback({ error: -300 });
+				return;
+			}
 			const q = url.indexOf('?');
 			if (q !== -1) url = url.substring(0, q);
 
-			const rel = normalizeRelative(extractRelative(path.normalize(url)));
+			const rel = normalizeRelative(extractRelative(url), 'file protocol');
 			if (rel) {
 				let patched = PATCHED_RESOURCE_CACHE.get(rel);
 				if (patched === undefined) {

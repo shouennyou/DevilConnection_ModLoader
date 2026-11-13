@@ -64,8 +64,8 @@ function initializeRuntime() {
  * @returns {boolean}
  */
 function start(targetWindow) {
-	if (core.Env.isMain) patchReport.startSession();
 	if (!initializeRuntime()) return false;
+	if (core.Env.isMain) patchReport.startSession();
 	if (core.Env.isMain) injectIntoTargetWindow(targetWindow);
 	return true;
 }

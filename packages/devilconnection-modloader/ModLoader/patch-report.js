@@ -5,9 +5,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const { ipcMain, ipcRenderer } = require('electron');
 
 const REPORT_DIRECTORY = 'cache';
 const REPORT_FILE = 'patch-report.json';
+const REPORT_CHANNEL = 'modloader:patch-report';
 
 let core;
 let report = null;
@@ -48,7 +50,8 @@ function startSession() {
 		updatedAt: startedAt,
 		gameCore: core?.PluginManager?.gameCorePath ? path.basename(core.PluginManager.gameCorePath) : null,
 		summary: { applied: 0, failed: 0, unverified: 0 },
-		patches: []
+		patches: [],
+		rejectedPaths: []
 	};
 	writeReport();
 }
@@ -97,6 +100,7 @@ function getPatchRecord({ layerPath, patchPath, targetPath, format, status, code
 }
 
 function recordApplied(data) {
+	if (forwardToMain('applied', data)) return;
 	const { isNew } = getPatchRecord({ ...data, status: 'applied', message: '补丁已应用' });
 	if (isNew) report.summary.applied++;
 	report.updatedAt = now();
@@ -104,6 +108,7 @@ function recordApplied(data) {
 }
 
 function recordFailure(data) {
+	if (forwardToMain('failed', data)) return;
 	const { record, isNew } = getPatchRecord({ ...data, status: 'failed' });
 	if (isNew) report.summary.failed++;
 	report.updatedAt = now();
@@ -117,12 +122,53 @@ function recordFailure(data) {
 	}
 }
 
+function recordPathRejection(data) {
+	if (forwardToMain('rejected-path', data)) return;
+	ensureSession();
+	const timestamp = now();
+	let entry = report.rejectedPaths.find(item => item.source === data.source && item.path === data.path && item.reason === data.reason);
+	if (entry) {
+		entry.occurrences++;
+		entry.lastOccurredAt = timestamp;
+	} else {
+		entry = { ...data, firstOccurredAt: timestamp, lastOccurredAt: timestamp, occurrences: 1 };
+		report.rejectedPaths.push(entry);
+	}
+	report.updatedAt = timestamp;
+	writeReport();
+}
+
+function forwardToMain(type, data) {
+	if (core?.Env?.isMain !== false) return false;
+	try {
+		if (!ipcRenderer) throw new Error('ipcRenderer 不可用');
+		ipcRenderer.sendSync(REPORT_CHANNEL, { type, data });
+	} catch (error) {
+		core.Logger.warn('无法将补丁报告发送到主进程', error);
+	}
+	// 渲染进程不独立写报告，避免覆盖主进程或其他渲染进程的数据。
+	return true;
+}
+
 function setFailureReporter(reporter) {
 	failureReporter = typeof reporter === 'function' ? reporter : null;
 }
 
 function init(dependencies) {
 	core = dependencies;
+	if (core.Env.isMain && ipcMain) {
+		ipcMain.on(REPORT_CHANNEL, (event, message) => {
+			try {
+				if (message?.type === 'applied') recordApplied(message.data);
+				else if (message?.type === 'failed') recordFailure(message.data);
+				else if (message?.type === 'rejected-path') recordPathRejection(message.data);
+			} catch (error) {
+				console.warn('[ModLoader] 处理补丁报告失败:', error);
+			} finally {
+				event.returnValue = true;
+			}
+		});
+	}
 }
 
 module.exports = {
@@ -130,5 +176,6 @@ module.exports = {
 	startSession,
 	recordApplied,
 	recordFailure,
+	recordPathRejection,
 	setFailureReporter
 };
