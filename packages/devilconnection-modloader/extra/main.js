@@ -290,6 +290,14 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('modmanager:getSaveImportStatus', async () => {
 		return ModManagerApi.getSaveImportStatus();
 	});
+	// GetSaveStorageRedirectStatus: 返回原版存档目录重定向的配置、可访问性与实际生效状态。
+	ipcMain.handle('modmanager:getSaveStorageRedirectStatus', async () => {
+		return ModManagerApi.getSaveStorageRedirectStatus();
+	});
+	// SetSaveStorageRedirectEnabled: 设置原版存档目录重定向开关；开启前验证目录可读写。
+	ipcMain.handle('modmanager:setSaveStorageRedirectEnabled', async (event, enabled) => {
+		return ModManagerApi.setSaveStorageRedirectEnabled(enabled === true);
+	});
 	// SelectSaveImportDirectory: 选择并保存原版存档来源目录, 不复制文件.
 	ipcMain.handle('modmanager:selectSaveImportDirectory', async () => {
 		return ModManagerApi.selectSaveImportDirectory();

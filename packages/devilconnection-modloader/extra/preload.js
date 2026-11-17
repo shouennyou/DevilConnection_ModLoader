@@ -136,6 +136,16 @@ const modManagerAPI = {
 		return await ipcRenderer.invoke('modmanager:getSaveImportStatus');
 	},
 
+	/** 返回原版存档目录重定向的配置、可访问性与实际生效状态。 */
+	getSaveStorageRedirectStatus: async () => {
+		return await ipcRenderer.invoke('modmanager:getSaveStorageRedirectStatus');
+	},
+
+	/** 开启或关闭原版存档目录重定向。开启前主进程会验证来源目录可读写。 */
+	setSaveStorageRedirectEnabled: async (enabled) => {
+		return await ipcRenderer.invoke('modmanager:setSaveStorageRedirectEnabled', enabled === true);
+	},
+
 	/** 打开目录选择对话框并保存原版存档来源目录. */
 	selectSaveImportDirectory: async () => {
 		return await ipcRenderer.invoke('modmanager:selectSaveImportDirectory');

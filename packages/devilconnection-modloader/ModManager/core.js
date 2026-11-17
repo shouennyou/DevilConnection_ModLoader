@@ -29,6 +29,7 @@ const MOD_ORDER_FILE = 'mod_order.json';
 const APP_CONFIG_FILE = 'mod-manager.json';
 const GAME_CORE_PATH_KEY = 'gameCorePath';
 const SAVE_IMPORT_DIR_KEY = 'saveImportDir';
+const SAVE_STORAGE_REDIRECT_ENABLED_KEY = 'saveStorageRedirectEnabled';
 
 const BACKUP_DIR = 'backups';
 const BACKUP_LOCK_FILE = 'backup_locks.json';
@@ -149,6 +150,7 @@ module.exports = {
 	APP_CONFIG_FILE,
 	GAME_CORE_PATH_KEY,
 	SAVE_IMPORT_DIR_KEY,
+	SAVE_STORAGE_REDIRECT_ENABLED_KEY,
 	BACKUP_DIR,
 	BACKUP_LOCK_FILE,
 	STORAGE_DIR,

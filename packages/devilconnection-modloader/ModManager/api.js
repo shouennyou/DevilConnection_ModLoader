@@ -21,6 +21,7 @@ const {
 	APP_CONFIG_FILE,
 	GAME_CORE_PATH_KEY,
 	SAVE_IMPORT_DIR_KEY,
+	SAVE_STORAGE_REDIRECT_ENABLED_KEY,
 	BACKUP_DIR,
 	BACKUP_LOCK_FILE,
 	STORAGE_DIR,
@@ -368,6 +369,18 @@ const ModManagerApi = {
 		}
 	},
 
+	/** 使用 original-fs 验证存档目录具有读写权限。 */
+	isSaveDirectoryWritable(dirPath) {
+		if (!this.isSaveDirectory(dirPath)) return false;
+		try {
+			const constants = originalFs.constants;
+			originalFs.accessSync(dirPath, constants.R_OK | constants.W_OK);
+			return true;
+		} catch (error) {
+			return false;
+		}
+	},
+
 	/** 返回目录顶层的 .sav 普通文件名, 读取失败时返回空数组. */
 	listSaveFiles(dirPath) {
 		if (!this.isSaveDirectory(dirPath)) return [];
@@ -397,6 +410,57 @@ const ModManagerApi = {
 			exists,
 			count: exists ? this.listSaveFiles(saveImportDir).length : 0,
 		};
+	},
+
+	/**
+	 * 返回原版存档目录重定向的配置与可生效状态。
+	 * active 为 true 时，后续文件 API 可将 ../_storage 映射到 path。
+	 */
+	getSaveStorageRedirectStatus() {
+		const config = this.readAppConfig();
+		const saveImportDir = this.getConfiguredSaveImportDir();
+		const configured = saveImportDir !== null;
+		const exists = configured && this.isSaveDirectory(saveImportDir);
+		const writable = exists && this.isSaveDirectoryWritable(saveImportDir);
+		const enabled = config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] === true;
+		let message;
+		if (enabled && !configured) message = '请先选择原版存档文件夹';
+		else if (enabled && !exists) message = '原版存档文件夹无法访问, 请重新选择';
+		else if (enabled && !writable) message = '原版存档文件夹不可写';
+
+		return {
+			enabled,
+			active: enabled && writable,
+			path: saveImportDir,
+			configured,
+			exists,
+			writable,
+			...(message ? { message } : {}),
+		};
+	},
+
+	/** 设置原版存档目录重定向开关；开启前必须验证目录可读写。 */
+	setSaveStorageRedirectEnabled(enabled) {
+		const current = this.getSaveStorageRedirectStatus();
+		if (typeof enabled !== 'boolean') {
+			return { success: false, ...current, message: '存档重定向开关无效' };
+		}
+
+		if (enabled && !current.writable) {
+			return {
+				success: false,
+				...current,
+				message: current.message || '原版存档文件夹不可用或不可写',
+			};
+		}
+
+		const config = this.readAppConfig();
+		config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = enabled;
+		if (!this.writeAppConfig(config)) {
+			return { success: false, ...current, message: '保存存档重定向设置失败' };
+		}
+
+		return { success: true, ...this.getSaveStorageRedirectStatus() };
 	},
 
 	/** 由主进程选择并保存外部存档来源目录, 不会移动或复制任何文件. */
@@ -434,6 +498,7 @@ const ModManagerApi = {
 	clearSaveImportDirectory() {
 		const config = this.readAppConfig();
 		delete config[SAVE_IMPORT_DIR_KEY];
+		delete config[SAVE_STORAGE_REDIRECT_ENABLED_KEY];
 		return this.writeAppConfig(config)
 			? { success: true }
 			: { success: false, message: '清除存档文件夹路径失败' };
