@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { Env, Logger, PluginManager, electronFs } = require('./core');
+const { resolveSaveStorageRedirect } = require('../utils/SaveStorageRedirect');
 
 let originalFs = fs;
 try {
@@ -51,6 +52,15 @@ function resolveResourcePath(resourcesPath, inputPath, options = {}) {
 	const absolutePath = path.isAbsolute(inputPath) ? path.resolve(inputPath) : null;
 	if (absolutePath && isPathWithin(dataBase, absolutePath)) {
 		if (!options.allowRoot && path.relative(dataBase, absolutePath) === '') return null;
+		if (allowStorage) {
+			const redirected = resolveSaveStorageRedirect(
+				dataBase,
+				path.join(dataBase, '_storage'),
+				absolutePath,
+				originalFs
+			);
+			if (redirected.matched) return redirected.path;
+		}
 		return absolutePath;
 	}
 
@@ -73,6 +83,14 @@ function resolveResourcePath(resourcesPath, inputPath, options = {}) {
 
 	const isStoragePath = isStorageRelative || isPathWithin(resourcesStorageBase, fullPath);
 	if (isStoragePath) {
+		const redirected = resolveSaveStorageRedirect(
+			dataBase,
+			resourcesStorageBase,
+			fullPath,
+			originalFs
+		);
+		if (redirected.matched && redirected.status?.enabled) return redirected.path;
+
 		const userStoragePath = path.resolve(
 			dataBase,
 			'_storage',

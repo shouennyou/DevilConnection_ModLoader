@@ -381,6 +381,44 @@ const ModManagerApi = {
 		}
 	},
 
+	/**
+	 * 通过实际创建、写入、读取、重命名和删除临时文件确认存档目录可完整使用。
+	 * 不触碰现有存档；任意步骤失败后都会尽力清理临时文件。
+	 */
+	testSaveDirectoryAccess(dirPath) {
+		if (!this.isSaveDirectory(dirPath)) {
+			return { success: false, message: '原版存档文件夹无法访问' };
+		}
+
+		const id = randomUUID();
+		const tempPath = path.join(dirPath, `.modloader-save-redirect-${id}.tmp`);
+		const renamedPath = `${tempPath}.renamed`;
+		const content = `save-redirect-probe:${id}`;
+		try {
+			originalFs.writeFileSync(tempPath, content, { encoding: 'utf-8', flag: 'wx' });
+			if (originalFs.readFileSync(tempPath, 'utf-8') !== content) {
+				throw new Error('临时文件读取校验失败');
+			}
+			originalFs.renameSync(tempPath, renamedPath);
+			originalFs.unlinkSync(renamedPath);
+			return { success: true };
+		} catch (error) {
+			Logger.error(`存档重定向目录权限检测失败: ${dirPath}`, error);
+			return {
+				success: false,
+				message: '无法完成创建、写入、读取、重命名或删除测试',
+			};
+		} finally {
+			for (const probePath of [tempPath, renamedPath]) {
+				try {
+					if (originalFs.existsSync(probePath)) originalFs.unlinkSync(probePath);
+				} catch (cleanupError) {
+					Logger.error(`清理存档重定向临时文件失败: ${probePath}`, cleanupError);
+				}
+			}
+		}
+	},
+
 	/** 返回目录顶层的 .sav 普通文件名, 读取失败时返回空数组. */
 	listSaveFiles(dirPath) {
 		if (!this.isSaveDirectory(dirPath)) return [];
@@ -439,19 +477,37 @@ const ModManagerApi = {
 		};
 	},
 
-	/** 设置原版存档目录重定向开关；开启前必须验证目录可读写。 */
+	/** 设置原版存档目录重定向开关；开启前必须完成实际文件操作检测。 */
 	setSaveStorageRedirectEnabled(enabled) {
 		const current = this.getSaveStorageRedirectStatus();
 		if (typeof enabled !== 'boolean') {
 			return { success: false, ...current, message: '存档重定向开关无效' };
 		}
 
-		if (enabled && !current.writable) {
+		if (enabled && (!current.configured || !current.exists)) {
+			const config = this.readAppConfig();
+			config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
+			const disabled = this.writeAppConfig(config);
 			return {
 				success: false,
-				...current,
-				message: current.message || '原版存档文件夹不可用或不可写',
+				...(disabled ? this.getSaveStorageRedirectStatus() : current),
+				message: current.message || '原版存档文件夹无法访问，未启用直接使用原版存档',
 			};
+		}
+		if (enabled) {
+			const probe = this.testSaveDirectoryAccess(current.path);
+			if (!probe.success) {
+				const config = this.readAppConfig();
+				config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
+				const disabled = this.writeAppConfig(config);
+				return {
+					success: false,
+					...(disabled ? this.getSaveStorageRedirectStatus() : current),
+					message: disabled
+						? `${probe.message}，未启用直接使用原版存档。`
+						: `${probe.message}，且无法保存关闭状态。`,
+				};
+			}
 		}
 
 		const config = this.readAppConfig();
