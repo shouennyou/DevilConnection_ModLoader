@@ -323,12 +323,12 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModManagerApi.listBackups();
 	});
 
-	// Create: 输入 name. 将 _storage 中的 .sav 存档压缩为备份, 返回 Promise<{success, file?, count?, noSave?, message?}>.
+	// Create: 输入 name. 将当前实际存档目录中的 .sav 存档压缩为备份, 返回 Promise<{success, file?, count?, noSave?, message?}>.
 	ipcMain.handle('backup:create', async (event, name) => {
 		return ModManagerApi.createBackup(name || '');
 	});
 
-	// Restore: 输入 file. 将备份解压回 _storage 目录, 返回 Promise<{success, count?, message?}>.
+	// Restore: 输入 file. 将备份解压回当前实际存档目录, 返回 Promise<{success, count?, message?}>.
 	ipcMain.handle('backup:restore', async (event, file) => {
 		return ModManagerApi.restoreBackup(file || '');
 	});

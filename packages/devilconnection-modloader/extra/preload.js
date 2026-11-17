@@ -278,11 +278,11 @@ const backupAPI = {
 	list: async () => {
 		return await ipcRenderer.invoke('backup:list');
 	},
-	/** 创建备份(压缩 _storage 的 .sav),返回 {success, file?, count?, message?} */
+	/** 创建备份(压缩当前实际存档目录的 .sav),返回 {success, file?, count?, message?} */
 	create: async (name) => {
 		return await ipcRenderer.invoke('backup:create', name || '');
 	},
-	/** 恢复备份(解压回 _storage),返回 {success, message?} */
+	/** 恢复备份(解压回当前实际存档目录),返回 {success, message?} */
 	restore: async (file) => {
 		return await ipcRenderer.invoke('backup:restore', file || '');
 	},

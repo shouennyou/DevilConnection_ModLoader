@@ -1370,11 +1370,30 @@ const ModManagerApi = {
 		});
 	},
 
-	/** 游戏存档目录. 安装目录不可写时使用 userData/_storage. */
+	/** 独立版游戏存档目录. 安装目录不可写时使用 userData/_storage. */
 	getStorageDir() {
 		return path.resolve(this.dataPath) === path.resolve(this.resourcesPath)
 			? path.normalize(path.join(this.resourcesPath, '..', STORAGE_DIR))
 			: path.join(this.dataPath, STORAGE_DIR);
+	},
+
+	/**
+	 * 返回备份与恢复应使用的实际存档目录。
+	 * 存档重定向开启后必须使用原版存档目录；其不可用时拒绝操作，
+	 * 不得静默回退到独立版 _storage。
+	 */
+	getBackupStorageDirectory() {
+		const redirectStatus = this.getSaveStorageRedirectStatus();
+		if (redirectStatus.enabled) {
+			if (!redirectStatus.active || !redirectStatus.path) {
+				return {
+					success: false,
+					message: redirectStatus.message || '原版存档文件夹不可用，无法操作存档备份',
+				};
+			}
+			return { success: true, path: redirectStatus.path, redirected: true };
+		}
+		return { success: true, path: this.getStorageDir(), redirected: false };
 	},
 
 	/** 备份目录. */
@@ -1448,12 +1467,14 @@ const ModManagerApi = {
 	},
 
 	/**
- * 将 _storage 下的 .sav 存档压缩为备份.
+	 * 将当前实际存档目录下的 .sav 存档压缩为备份.
 	 * @param {string} [name] 备份文件名, 可不含 .zip.
 	 * @returns {{ success: boolean, file?: string, count?: number, message?: string }}
 	 */
 	createBackup(name) {
-		const storageDir = this.getStorageDir();
+		const storage = this.getBackupStorageDirectory();
+		if (!storage.success) return { success: false, message: storage.message };
+		const storageDir = storage.path;
 		if (!originalFs.existsSync(storageDir)) {
 			return { success: false, noSave: true, message: '存档目录不存在' };
 		}
@@ -1500,7 +1521,7 @@ const ModManagerApi = {
 	/**
 	 * 恢复备份.
 	 * 先将新存档完整写入临时目录并验证, 成功后通过目录切换提交.
-	 * 切换后任一步失败都会恢复原 _storage.
+	 * 切换后任一步失败都会恢复原存档目录.
 	 * 自动跳过 steam_autocloud.vdf, 防止与 Steam 云存档冲突.
 	 * @param {string} file
 	 * @returns {{ success: boolean, count?: number, message?: string }}
@@ -1510,8 +1531,17 @@ const ModManagerApi = {
 		if (!zipPath || !originalFs.existsSync(zipPath)) {
 			return { success: false, message: '备份不存在' };
 		}
-		const storageDir = this.getStorageDir();
-		const stagingDir = path.join(this.getBackupDir(), `.restore-staging-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+		const storage = this.getBackupStorageDirectory();
+		if (!storage.success) return { success: false, message: storage.message };
+		const storageDir = storage.path;
+		// 重定向目录可能位于不同磁盘。目录切换依赖同卷 rename，
+		// 因此临时目录要放在目标目录同级，而不是固定放在 dataPath/backups。
+		const stagingParent = storage.redirected ? path.dirname(storageDir) : this.getBackupDir();
+		const storageName = path.basename(path.resolve(storageDir)) || STORAGE_DIR;
+		const stagingDir = path.join(
+			stagingParent,
+			`.${storageName}.restore-staging-${Date.now()}-${Math.random().toString(16).slice(2)}`
+		);
 		const restoredSavesDir = path.join(stagingDir, 'restored');
 		const nextStorageDir = path.join(stagingDir, 'next');
 		const previousStorageDir = path.join(stagingDir, 'previous');
