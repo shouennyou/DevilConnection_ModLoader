@@ -36,6 +36,16 @@ function getSavePathResolution(filePath) {
 	if (typeof filePath !== 'string' || !resolveSaveStorageRedirect) {
 		return { path: filePath, redirected: false, storagePath: null }
 	}
+	let dataPath = null
+	try {
+		dataPath = modloader?.returnModLoaderDataPath?.() || null
+	} catch (e) {
+		console.error('[ModLoader] 读取存档重定向数据目录失败:', e)
+	}
+	if (typeof dataPath !== 'string' || !dataPath.trim()) {
+		return { path: filePath, redirected: false, storagePath: null }
+	}
+
 	let defaultStoragePath = null
 	if (process.platform === 'darwin') {
 		// 与 returnAppPath() 保持一致：原版会对 userData/app.asar 取 dirname，
@@ -44,6 +54,10 @@ function getSavePathResolution(filePath) {
 		if (typeof gameSaveAppPath === 'string' && gameSaveAppPath.trim()) {
 			defaultStoragePath = path.resolve(path.dirname(gameSaveAppPath), '_storage')
 		}
+	} else if (process.platform === 'linux') {
+		// Linux 的存档路径修复模组以 ModLoader dataPath 作为游戏根目录。
+		// RuntimePaths 已保证此处为 Electron userData，因此游戏实际访问 dataPath/_storage。
+		defaultStoragePath = path.resolve(dataPath, '_storage')
 	} else {
 		const resourcesPath = typeof process.resourcesPath === 'string' && process.resourcesPath
 			? path.resolve(process.resourcesPath)
@@ -57,16 +71,6 @@ function getSavePathResolution(filePath) {
 	const candidatePath = portablePath === storagePrefix || portablePath.startsWith(`${storagePrefix}/`)
 		? path.resolve(defaultStoragePath, portablePath.slice(storagePrefix.length).replace(/^\/+/, ''))
 		: path.resolve(filePath)
-
-	let dataPath = null
-	try {
-		dataPath = modloader?.returnModLoaderDataPath?.() || null
-	} catch (e) {
-		console.error('[ModLoader] 读取存档重定向数据目录失败:', e)
-	}
-	if (typeof dataPath !== 'string' || !dataPath.trim()) {
-		return { path: filePath, redirected: false, storagePath: null }
-	}
 
 	const redirected = resolveSaveStorageRedirect(dataPath, defaultStoragePath, candidatePath, fs)
 	if (!redirected.matched || !redirected.status?.enabled) {
