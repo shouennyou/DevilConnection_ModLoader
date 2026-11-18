@@ -152,6 +152,10 @@ const modManagerAPI = {
 	selectLocalModFile: async () => {
 		return await ipcRenderer.invoke('modmanager:selectLocalModFile');
 	},
+	/** 使用主进程原生文件对话框一次选择多个外部 ASAR 模组. */
+	selectLocalModFiles: async () => {
+		return await ipcRenderer.invoke('modmanager:selectLocalModFiles');
+	},
 
 	/** 在主进程将外部 ASAR 复制到模组目录. */
 	importLocalModFile: async (sourcePath) => {

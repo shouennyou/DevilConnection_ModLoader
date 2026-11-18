@@ -241,6 +241,10 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('modmanager:selectLocalModFile', async () => {
 		return ModManagerApi.selectLocalModFile();
 	});
+	// SelectLocalModFiles: 使用原生文件对话框一次选择多个外部 ASAR 模组.
+	ipcMain.handle('modmanager:selectLocalModFiles', async () => {
+		return ModManagerApi.selectLocalModFiles();
+	});
 	// ImportLocalModFile: 由主进程将已选择的外部 ASAR 复制到模组目录.
 	ipcMain.handle('modmanager:importLocalModFile', async (event, sourcePath) => {
 		return ModManagerApi.importLocalModFile(sourcePath || '');
@@ -398,19 +402,31 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		}
 	});
 
-	// Import: 通过打开对话框选择外部 ZIP 文件并导入 backups 目录, 返回 Promise<{success, file?, canceled?, message?}>.
+	// Import: 通过打开对话框选择一个或多个外部 ZIP 文件并导入 backups 目录.
 	ipcMain.handle('backup:import', async () => {
 		const { dialog, BrowserWindow } = require('electron');
 		const win = BrowserWindow.getFocusedWindow();
 		const result = await dialog.showOpenDialog(win, {
 			title: '导入备份',
 			filters: [{ name: 'Zip 压缩包', extensions: ['zip'] }],
-			properties: ['openFile'],
+			properties: ['openFile', 'multiSelections'],
 		});
 		if (result.canceled || !result.filePaths.length) {
 			return { success: false, canceled: true };
 		}
-		return ModManagerApi.importBackup(result.filePaths[0]);
+		const files = [];
+		const failed = [];
+		for (const filePath of result.filePaths) {
+			const imported = ModManagerApi.importBackup(filePath);
+			if (imported.success) {
+				files.push(imported.file);
+			} else {
+				failed.push({ file: filePath, message: imported.message || '导入失败' });
+			}
+		}
+		return files.length > 0
+			? { success: true, file: files[0], files, failed }
+			: { success: false, files, failed, message: failed[0]?.message || '导入失败' };
 	});
 
 	// ImportFromPath: 从渲染进程已验证的绝对路径导入 ZIP 备份, 用于拖放导入.

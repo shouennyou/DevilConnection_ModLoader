@@ -458,6 +458,29 @@ const ModManagerApi = {
 			: { success: false, message: '请选择存在的 .asar 模组文件' };
 	},
 
+	/** 由主进程一次选择多个要导入的本地 ASAR 模组. */
+	async selectLocalModFiles() {
+		const { BrowserWindow, dialog } = require('electron');
+		const options = {
+			title: '选择本地模组',
+			properties: ['openFile', 'multiSelections'],
+			filters: [{ name: 'ModLoader ASAR', extensions: ['asar'] }],
+		};
+		const parent = BrowserWindow.getFocusedWindow();
+		const result = parent
+			? await dialog.showOpenDialog(parent, options)
+			: await dialog.showOpenDialog(options);
+		if (result.canceled || result.filePaths.length === 0) {
+			return { success: false, canceled: true };
+		}
+
+		const files = result.filePaths.map(filePath => this.getLocalModFileInfo(filePath));
+		if (files.some(file => !file)) {
+			return { success: false, message: '所选项目中包含无法访问的 .asar 模组文件' };
+		}
+		return { success: true, files: files.map(file => ({ success: true, ...file })) };
+	},
+
 	/**
 	 * 在主进程复制外部 ASAR 到模组目录.
 	 * 先写入同目录临时文件, 成功后再替换目标文件.
