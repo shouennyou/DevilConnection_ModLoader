@@ -29,24 +29,39 @@ try {
 /**
  * 解析游戏通过 window.api 访问的默认存档路径。
  * 仅映射默认 _storage 及其等价绝对路径；其他文件系统路径保持原样。
+ * Linux 会先将安装目录旁的逻辑 _storage 映射到 userData/_storage，
+ * 再按设置决定是否重定向至原版存档目录。
  * 重定向已开启且已配置时始终返回原版路径，目录缺失时由游戏的创建/写入操作重建；
  * 未配置目标时才拒绝操作，避免静默回退到独立版存档目录。
  */
+function getInternalModLoaderDataPath() {
+	try {
+		return ipcRenderer.sendSync('modloader:getDataPath')
+	} catch (e) {
+		console.error('[ModLoader] 读取存档重定向数据目录失败:', e)
+		return null
+	}
+}
+
+function isPathWithin(rootPath, targetPath) {
+	const relativePath = path.relative(path.resolve(rootPath), path.resolve(targetPath))
+	return relativePath === '' || (!relativePath.startsWith(`..${path.sep}`) && !path.isAbsolute(relativePath))
+}
+
 function getSavePathResolution(filePath) {
 	if (typeof filePath !== 'string' || !resolveSaveStorageRedirect) {
 		return { path: filePath, redirected: false, storagePath: null }
 	}
-	let dataPath = null
-	try {
-		dataPath = modloader?.returnModLoaderDataPath?.() || null
-	} catch (e) {
-		console.error('[ModLoader] 读取存档重定向数据目录失败:', e)
-	}
+	const dataPath = getInternalModLoaderDataPath()
 	if (typeof dataPath !== 'string' || !dataPath.trim()) {
 		return { path: filePath, redirected: false, storagePath: null }
 	}
 
+	const resourcesPath = typeof process.resourcesPath === 'string' && process.resourcesPath
+		? path.resolve(process.resourcesPath)
+		: null
 	let defaultStoragePath = null
+	let linuxGameStoragePath = null
 	if (process.platform === 'darwin') {
 		// 与 returnAppPath() 保持一致：原版会对 userData/app.asar 取 dirname，
 		// 因而实际通过 window.api 访问的是 userData/_storage。
@@ -55,26 +70,36 @@ function getSavePathResolution(filePath) {
 			defaultStoragePath = path.resolve(path.dirname(gameSaveAppPath), '_storage')
 		}
 	} else if (process.platform === 'linux') {
-		// Linux 的存档路径修复模组以 ModLoader dataPath 作为游戏根目录。
-		// RuntimePaths 已保证此处为 Electron userData，因此游戏实际访问 dataPath/_storage。
+		// storage-fix 保留安装目录旁的逻辑路径；实际存档统一存入 userData/_storage。
+		if (resourcesPath) linuxGameStoragePath = path.resolve(resourcesPath, '..', '_storage')
 		defaultStoragePath = path.resolve(dataPath, '_storage')
 	} else {
-		const resourcesPath = typeof process.resourcesPath === 'string' && process.resourcesPath
-			? path.resolve(process.resourcesPath)
-			: null
 		if (resourcesPath) defaultStoragePath = path.resolve(resourcesPath, '..', '_storage')
 	}
 	if (!defaultStoragePath) return { path: filePath, redirected: false, storagePath: null }
 
 	const portablePath = filePath.replace(/\\/g, '/')
 	const storagePrefix = '../_storage'
-	const candidatePath = portablePath === storagePrefix || portablePath.startsWith(`${storagePrefix}/`)
-		? path.resolve(defaultStoragePath, portablePath.slice(storagePrefix.length).replace(/^\/+/, ''))
-		: path.resolve(filePath)
+	let candidatePath = path.resolve(filePath)
+	let linuxStorageMigrated = false
+	if (portablePath === storagePrefix || portablePath.startsWith(`${storagePrefix}/`)) {
+		candidatePath = path.resolve(defaultStoragePath, portablePath.slice(storagePrefix.length).replace(/^\/+/, ''))
+		linuxStorageMigrated = process.platform === 'linux'
+	} else if (process.platform === 'linux' && linuxGameStoragePath && isPathWithin(linuxGameStoragePath, candidatePath)) {
+		candidatePath = path.resolve(
+			defaultStoragePath,
+			path.relative(linuxGameStoragePath, candidatePath)
+		)
+		linuxStorageMigrated = true
+	}
 
 	const redirected = resolveSaveStorageRedirect(dataPath, defaultStoragePath, candidatePath, fs)
 	if (!redirected.matched || !redirected.status?.enabled) {
-		return { path: filePath, redirected: false, storagePath: null }
+		return {
+			path: linuxStorageMigrated ? candidatePath : filePath,
+			redirected: false,
+			storagePath: null,
+		}
 	}
 	if (redirected.path) {
 		return {
