@@ -287,10 +287,6 @@ function reviveStats(dto) {
 }
 
 const modLoaderAPI = {
-	/** 返回主进程按写入权限判定后的数据根目录. */
-	returnModLoaderDataPath: () => {
-		return ipcRenderer.sendSync('modloader:getDataPath');
-	},
 	/** 同步读取文件. encoding 默认 utf8, 传 null 返回 Uint8Array. */
 	readFileSync: (subPath, options) => {
 		return ipcRenderer.sendSync('modloader:readFileSync', { subPath: subPath || '', options: options || {} });

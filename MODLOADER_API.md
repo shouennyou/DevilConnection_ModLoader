@@ -24,19 +24,12 @@ const api = window.modloader
 
 | 类别 | 方法 | 用途 |
 | --- | --- | --- |
-| 运行时信息 | `returnModLoaderDataPath` | 取得当前实际使用的可写数据根目录。 |
 | 文件读写 | `readFile`、`writeFile` 及对应 `Sync` 方法 | 读写 UTF-8 文本、JSON 与中小型二进制数据。 |
 | 流式读写 | `createReadStream`、`readStreamChunk`、`createWriteStream`、`writeStreamChunk`、`closeStream` | 分块处理大文件，并以临时文件方式提交写入。 |
 | 文件查询 | `stat`、`readdir` 及对应 `Sync` 方法 | 查询路径类型和目录项。 |
 | 文件变更 | `rename`、`copyFile`、`rm` 及对应 `Sync` 方法 | 移动、复制或删除文件与目录。 |
 
-除 `returnModLoaderDataPath()` 外，本接口所有路径参数均遵循下方的“路径规则”。
-
-## 运行时信息
-
-| 方法 | 返回值 | 说明 |
-| --- | --- | --- |
-| `returnModLoaderDataPath()` | `string` | 返回 ModLoader 当前实际使用的数据根目录。安装目录不可写时，该目录可能是 Electron 的 `userData`，不要假设它等于 `resources`。 |
+所有路径参数均遵循下方的“路径规则”。
 
 ## 路径规则
 
