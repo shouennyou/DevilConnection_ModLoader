@@ -310,6 +310,15 @@ ipcMain.on('getAppPath', async (event, args) => {
 	event.returnValue = app.getAppPath();
 });
 
+// 原版 macOS 存档逻辑会对 returnAppPath() 的结果取 dirname。
+// 伪造 userData/app.asar 后，该逻辑会稳定得到 userData 作为存档根目录，
+// 同时不影响用于读取应用内资源的 getAppPath。
+ipcMain.on('getGameSaveAppPath', (event) => {
+	event.returnValue = process.platform === 'darwin'
+		? join(app.getPath('userData'), 'app.asar')
+		: app.getAppPath();
+});
+
 ipcMain.on('encrypt', async (event, text) => {
 	event.returnValue = safeStorage.encryptString(text);
 });

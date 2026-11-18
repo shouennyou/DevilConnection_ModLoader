@@ -28,7 +28,7 @@ try {
 
 /**
  * 解析游戏通过 window.api 访问的默认存档路径。
- * 仅映射 ../_storage 及其等价绝对路径；其他文件系统路径保持原样。
+ * 仅映射默认 _storage 及其等价绝对路径；其他文件系统路径保持原样。
  * 重定向已开启且已配置时始终返回原版路径，目录缺失时由游戏的创建/写入操作重建；
  * 未配置目标时才拒绝操作，避免静默回退到独立版存档目录。
  */
@@ -36,12 +36,22 @@ function getSavePathResolution(filePath) {
 	if (typeof filePath !== 'string' || !resolveSaveStorageRedirect) {
 		return { path: filePath, redirected: false, storagePath: null }
 	}
-	const resourcesPath = typeof process.resourcesPath === 'string' && process.resourcesPath
-		? path.resolve(process.resourcesPath)
-		: null
-	if (!resourcesPath) return { path: filePath, redirected: false, storagePath: null }
+	let defaultStoragePath = null
+	if (process.platform === 'darwin') {
+		// 与 returnAppPath() 保持一致：原版会对 userData/app.asar 取 dirname，
+		// 因而实际通过 window.api 访问的是 userData/_storage。
+		const gameSaveAppPath = ipcRenderer.sendSync('getGameSaveAppPath')
+		if (typeof gameSaveAppPath === 'string' && gameSaveAppPath.trim()) {
+			defaultStoragePath = path.resolve(path.dirname(gameSaveAppPath), '_storage')
+		}
+	} else {
+		const resourcesPath = typeof process.resourcesPath === 'string' && process.resourcesPath
+			? path.resolve(process.resourcesPath)
+			: null
+		if (resourcesPath) defaultStoragePath = path.resolve(resourcesPath, '..', '_storage')
+	}
+	if (!defaultStoragePath) return { path: filePath, redirected: false, storagePath: null }
 
-	const defaultStoragePath = path.resolve(resourcesPath, '..', '_storage')
 	const portablePath = filePath.replace(/\\/g, '/')
 	const storagePrefix = '../_storage'
 	const candidatePath = portablePath === storagePrefix || portablePath.startsWith(`${storagePrefix}/`)
@@ -153,7 +163,9 @@ contextBridge.exposeInMainWorld('api', {
 	},
 
 	//Appパス
-	returnAppPath: () => ipcRenderer.sendSync('getAppPath'),
+	// macOS では原版の存档路径推导需要以 userData 为根目录。
+	// returnAppPath: () => ipcRenderer.sendSync('getAppPath'),
+	returnAppPath: () => ipcRenderer.sendSync('getGameSaveAppPath'),
 	returnRelativePath: async (file_path, item_path) => {
 		return await ipcRenderer.invoke(
 			'path:returnRelativePath',
