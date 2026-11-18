@@ -35,10 +35,19 @@ const isWritable = hasFullWriteAccess;
 
 /**
  * 返回可写数据根目录.
- * resources 目录没有完整写权限时, 统一改用 Electron 的 userData 目录.
+ * macOS 的 .app 包会在更新时整体替换，因此无论 Resources 是否可写都必须使用 Electron userData。
+ * 其他平台保持既有逻辑：resources 没有完整写权限时才改用 Electron userData 目录。
  */
 function getWritableDataPath(resourcesPath, electron, fileSystem = fs) {
 	const normalizedResourcesPath = path.normalize(resourcesPath);
+	if (process.platform === 'darwin') {
+		const userDataPath = getElectronApp(electron)?.getPath('userData');
+		if (typeof userDataPath === 'string' && userDataPath.trim()) {
+			return path.normalize(userDataPath);
+		}
+		throw new Error('macOS 无法读取 Electron userData 数据目录');
+	}
+
 	if (hasFullWriteAccess(normalizedResourcesPath, fileSystem)) {
 		return normalizedResourcesPath;
 	}
