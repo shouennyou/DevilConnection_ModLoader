@@ -282,6 +282,10 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('modmanager:selectGameCoreFile', async () => {
 		return ModManagerApi.selectGameCoreFile();
 	});
+	// SetGameCoreFilePath: 校验并保存由受信任拖放区提交的游戏核心绝对路径.
+	ipcMain.handle('modmanager:setGameCoreFilePath', async (event, sourcePath) => {
+		return ModManagerApi.setGameCoreFilePath(sourcePath);
+	});
 	// ClearGameCoreFile: 清除已保存的游戏核心路径, 返回 Promise<{success, message?}>.
 	ipcMain.handle('modmanager:clearGameCoreFile', async () => {
 		return ModManagerApi.clearGameCoreFile();
@@ -301,6 +305,10 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	// SelectSaveImportDirectory: 选择并保存原版存档来源目录, 不复制文件.
 	ipcMain.handle('modmanager:selectSaveImportDirectory', async () => {
 		return ModManagerApi.selectSaveImportDirectory();
+	});
+	// SetSaveImportDirectoryPath: 校验并保存由受信任拖放区提交的原版存档目录绝对路径.
+	ipcMain.handle('modmanager:setSaveImportDirectoryPath', async (event, sourcePath) => {
+		return ModManagerApi.setSaveImportDirectoryPath(sourcePath);
 	});
 	// ClearSaveImportDirectory: 清除已保存的存档来源目录, 不删除原文件.
 	ipcMain.handle('modmanager:clearSaveImportDirectory', async () => {

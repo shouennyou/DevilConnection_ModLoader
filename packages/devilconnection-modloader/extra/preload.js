@@ -1,12 +1,79 @@
 // preload_extra.js - 管理器预加载 API.
 const {
-	ipcRenderer
+	ipcRenderer,
+	webUtils,
 } = require('electron');
+
+let droppedPathHandler = null;
+
+function getDropTarget(event) {
+	const eventPath = typeof event.composedPath === 'function'
+		? event.composedPath()
+		: [event.target];
+	for (const node of eventPath) {
+		if (!node || typeof node.getAttribute !== 'function') continue;
+		const target = node.getAttribute('data-modmanager-drop-target');
+		if (target === 'game-core' || target === 'save-import') return target;
+	}
+	return null;
+}
+
+function getDroppedLocalPath(file) {
+	if (!file) return '';
+	try {
+		const filePath = webUtils?.getPathForFile?.(file);
+		if (typeof filePath === 'string' && filePath.trim()) return filePath;
+	} catch (error) {
+		console.error('[ModManager] 读取拖入文件路径失败:', error);
+	}
+	return typeof file.path === 'string' && file.path.trim() ? file.path : '';
+}
+
+function notifyDroppedPath(payload) {
+	if (typeof droppedPathHandler !== 'function') return;
+	try {
+		droppedPathHandler(payload);
+	} catch (error) {
+		console.error('[ModManager] 处理拖入项目回调失败:', error);
+	}
+}
+
+// File.path 不是标准 Web API，且在 contextIsolation 的主世界中可能不可用。
+// 在 preload 隔离世界读取原始 DragEvent 后，仅向前端传递经过整理的路径和类型信息。
+document.addEventListener('dragover', event => {
+	if (getDropTarget(event)) event.preventDefault();
+}, true);
+
+document.addEventListener('drop', event => {
+	const target = getDropTarget(event);
+	if (!target) return;
+	event.preventDefault();
+	const files = Array.from(event.dataTransfer?.files || []);
+	const file = files[0] || null;
+	const entry = event.dataTransfer?.items?.[0]?.webkitGetAsEntry?.();
+	notifyDroppedPath({
+		target,
+		fileCount: files.length,
+		fileName: file?.name || '',
+		entryType: entry?.isDirectory ? 'directory' : entry?.isFile ? 'file' : 'unknown',
+		sourcePath: getDroppedLocalPath(file) || null,
+	});
+}, true);
 
 // ─── ModManager CRUD ──────────────────────────────────────────────────────────
 // 所有相对路径由主进程按写入权限解析至 resourcesPath 或 userData.
 
 const modManagerAPI = {
+	/** 注册设置页拖放回调；路径由 preload 从原始 DragEvent 中读取。 */
+	setDroppedPathHandler: callback => {
+		droppedPathHandler = typeof callback === 'function' ? callback : null;
+	},
+
+	/** 清除设置页拖放回调，防止页面卸载后继续触发。 */
+	clearDroppedPathHandler: () => {
+		droppedPathHandler = null;
+	},
+
 	/** 列出 subPath 目录下的文件/文件夹/asar,返回数组 [{name, isDir, isAsar}] */
 	list: async (subPath) => {
 		return await ipcRenderer.invoke('modmanager:list', subPath || '');
@@ -126,6 +193,11 @@ const modManagerAPI = {
 		return await ipcRenderer.invoke('modmanager:selectGameCoreFile');
 	},
 
+	/** 校验并保存拖入的游戏核心文件绝对路径. */
+	setGameCoreFilePath: async (sourcePath) => {
+		return await ipcRenderer.invoke('modmanager:setGameCoreFilePath', sourcePath || '');
+	},
+
 	/** 清除已保存的游戏核心路径, 返回 Promise<{success, message?}>. */
 	clearGameCoreFile: async () => {
 		return await ipcRenderer.invoke('modmanager:clearGameCoreFile');
@@ -149,6 +221,11 @@ const modManagerAPI = {
 	/** 打开目录选择对话框并保存原版存档来源目录. */
 	selectSaveImportDirectory: async () => {
 		return await ipcRenderer.invoke('modmanager:selectSaveImportDirectory');
+	},
+
+	/** 校验并保存拖入的原版存档文件夹绝对路径. */
+	setSaveImportDirectoryPath: async (sourcePath) => {
+		return await ipcRenderer.invoke('modmanager:setSaveImportDirectoryPath', sourcePath || '');
 	},
 
 	/** 清除已保存的存档来源目录, 不删除来源文件. */

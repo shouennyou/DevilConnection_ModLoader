@@ -163,6 +163,7 @@ interface FetchTextResult {
 | --- | --- | --- |
 | `getGameCoreStatus()` | 无 | `Promise<{ path: string \| null, configured: boolean, exists: boolean }>` |
 | `selectGameCoreFile()` | 无 | `Promise<{ success: boolean, canceled?: boolean, path?: string, message?: string }>` |
+| `setGameCoreFilePath(sourcePath)` | `sourcePath: string` | 校验并保存拖入的 `.asar` 绝对路径。 |
 | `clearGameCoreFile()` | 无 | `Promise<{ success: boolean, message?: string }>` |
 
 ## 存档迁移
@@ -173,6 +174,7 @@ interface FetchTextResult {
 | --- | --- | --- |
 | `getSaveImportStatus()` | 无 | `Promise<{ path: string \| null, configured: boolean, exists: boolean, count: number }>` |
 | `selectSaveImportDirectory()` | 无 | `Promise<{ success: boolean, canceled?: boolean, path?: string, count?: number, message?: string }>` |
+| `setSaveImportDirectoryPath(sourcePath)` | `sourcePath: string` | 校验并保存拖入的存档文件夹绝对路径。 |
 | `clearSaveImportDirectory()` | 无 | `Promise<{ success: boolean, message?: string }>` |
 | `importSaves(replaceExisting?)` | `replaceExisting?: boolean` | `Promise<SaveImportResult>` |
 

@@ -241,6 +241,28 @@ const ModManagerApi = {
 		};
 	},
 
+	/**
+	 * 校验并保存游戏核心文件路径。
+	 * 渲染进程拖放使用此入口，避免由渲染进程直接写入配置。
+	 */
+	setGameCoreFilePath(sourcePath) {
+		if (typeof sourcePath !== 'string' || !sourcePath.trim() || !path.isAbsolute(sourcePath)) {
+			return { success: false, message: '请选择存在的 .asar 文件' };
+		}
+		const gameCorePath = path.normalize(sourcePath.trim());
+		if (!this.isGameCoreFile(gameCorePath)) {
+			return { success: false, message: '请选择存在的 .asar 文件' };
+		}
+
+		const success = this.writeAppConfig({
+			...this.readAppConfig(),
+			[GAME_CORE_PATH_KEY]: gameCorePath,
+		});
+		return success
+			? { success: true, path: gameCorePath }
+			: { success: false, message: '保存游戏核心文件路径失败' };
+	},
+
 	/** 由主进程显示文件选择对话框, 保存用户选择的路径而不复制文件. */
 	async selectGameCoreFile() {
 		const { BrowserWindow, dialog } = require('electron');
@@ -517,6 +539,28 @@ const ModManagerApi = {
 		}
 
 		return { success: true, ...this.getSaveStorageRedirectStatus() };
+	},
+
+	/**
+	 * 校验并保存原版存档文件夹路径。
+	 * 渲染进程拖放使用此入口，避免由渲染进程直接写入配置。
+	 */
+	setSaveImportDirectoryPath(sourcePath) {
+		if (typeof sourcePath !== 'string' || !sourcePath.trim() || !path.isAbsolute(sourcePath)) {
+			return { success: false, message: '请选择存在的文件夹' };
+		}
+		const saveImportDir = path.normalize(sourcePath.trim());
+		if (!this.isSaveDirectory(saveImportDir)) {
+			return { success: false, message: '请选择存在的文件夹' };
+		}
+
+		const success = this.writeAppConfig({
+			...this.readAppConfig(),
+			[SAVE_IMPORT_DIR_KEY]: saveImportDir,
+		});
+		return success
+			? { success: true, path: saveImportDir, count: this.listSaveFiles(saveImportDir).length }
+			: { success: false, message: '保存存档文件夹路径失败' };
 	},
 
 	/** 由主进程选择并保存外部存档来源目录, 不会移动或复制任何文件. */
