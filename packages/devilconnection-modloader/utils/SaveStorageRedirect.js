@@ -22,6 +22,29 @@ function readAppConfig(dataPath, fileSystem) {
 	}
 }
 
+function getDirectoryState(directoryPath, fileSystem) {
+	if (typeof directoryPath !== 'string' || !path.isAbsolute(directoryPath)) {
+		return { exists: false, writable: false, missing: false, issue: 'unavailable' };
+	}
+	try {
+		if (!fileSystem.statSync(directoryPath).isDirectory()) {
+			return { exists: false, writable: false, missing: false, issue: 'not-directory' };
+		}
+	} catch (error) {
+		return error?.code === 'ENOENT'
+			? { exists: false, writable: false, missing: true, issue: 'missing' }
+			: { exists: false, writable: false, missing: false, issue: 'unavailable' };
+	}
+
+	try {
+		const constants = fileSystem.constants || fs.constants;
+		fileSystem.accessSync(directoryPath, constants.R_OK | constants.W_OK);
+		return { exists: true, writable: true, missing: false, issue: null };
+	} catch (error) {
+		return { exists: true, writable: false, missing: false, issue: 'unwritable' };
+	}
+}
+
 /**
  * 返回原版存档目录重定向的配置与可生效状态。
  * @param {string} dataPath
@@ -35,41 +58,36 @@ function getSaveStorageRedirectStatus(dataPath, fileSystem = fs) {
 		? path.normalize(rawPath.trim())
 		: null;
 	const configured = saveImportDir !== null && path.isAbsolute(saveImportDir);
-	let exists = false;
-	let writable = false;
-	if (configured) {
-		try {
-			exists = fileSystem.statSync(saveImportDir).isDirectory();
-			if (exists) {
-				const constants = fileSystem.constants || fs.constants;
-				fileSystem.accessSync(saveImportDir, constants.R_OK | constants.W_OK);
-				writable = true;
-			}
-		} catch (error) {
-			exists = false;
-			writable = false;
-		}
-	}
+	const directoryState = configured
+		? getDirectoryState(saveImportDir, fileSystem)
+		: { exists: false, writable: false, missing: false, issue: null };
 
 	let message;
 	if (enabled && !configured) message = '请先选择原版存档文件夹';
-	else if (enabled && !exists) message = '原版存档文件夹无法访问, 请重新选择';
-	else if (enabled && !writable) message = '原版存档文件夹不可写';
+	else if (directoryState.missing) message = enabled
+		? '原版存档文件夹尚未创建；游戏写入或恢复备份时可自动重建'
+		: '原版存档文件夹尚未创建，可在开启时创建';
+	else if (directoryState.issue === 'not-directory') message = '原版存档路径不是文件夹';
+	else if (directoryState.issue === 'unavailable') message = '原版存档文件夹无法访问';
+	else if (directoryState.issue === 'unwritable') message = '原版存档文件夹不可写';
 
 	return {
 		enabled,
-		active: enabled && writable,
+		active: enabled && directoryState.writable,
 		path: configured ? saveImportDir : null,
 		configured,
-		exists,
-		writable,
+		exists: directoryState.exists,
+		writable: directoryState.writable,
+		missing: directoryState.missing,
+		issue: directoryState.issue,
 		...(message ? { message } : {}),
 	};
 }
 
 /**
  * 将默认存档根目录内的路径映射至已配置的原版存档目录。
- * 开关已启用但目标目录不可用时返回 path: null，调用方应拒绝操作而不是回退至独立版目录。
+ * 开关已启用且路径已配置时，即使目标目录暂缺也返回重定向路径，
+ * 由调用方决定是返回原生文件错误，还是在受控的写入操作中重建该目录；绝不回退至独立版目录。
  * @param {string} dataPath
  * @param {string} defaultStoragePath
  * @param {string} targetPath
@@ -84,7 +102,9 @@ function resolveSaveStorageRedirect(dataPath, defaultStoragePath, targetPath, fi
 
 	const status = getSaveStorageRedirectStatus(dataPath, fileSystem);
 	if (!status.enabled) return { matched: true, path: resolvedTargetPath, status };
-	if (!status.active || !status.path) return { matched: true, path: null, status };
+	// 已启用且已配置时始终映射到原版路径。目录暂缺时让调用方的创建/写入操作重建它，
+	// 但绝不回退到独立版存档目录。
+	if (!status.configured || !status.path) return { matched: true, path: null, status };
 
 	const redirectedPath = path.resolve(status.path, path.relative(resolvedDefaultStoragePath, resolvedTargetPath));
 	return {

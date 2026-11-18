@@ -520,16 +520,65 @@ const ModManagerApi = {
 		}
 	},
 
-	/** 使用 original-fs 验证存档目录具有读写权限。 */
-	isSaveDirectoryWritable(dirPath) {
-		if (!this.isSaveDirectory(dirPath)) return false;
+	/** 返回存档目录的可用性分类，避免将“尚未创建”误报为“无法访问”。 */
+	getSaveDirectoryState(dirPath) {
+		if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+			return { exists: false, writable: false, missing: false, issue: 'unavailable' };
+		}
+		try {
+			if (!originalFs.statSync(dirPath).isDirectory()) {
+				return { exists: false, writable: false, missing: false, issue: 'not-directory' };
+			}
+		} catch (error) {
+			return error?.code === 'ENOENT'
+				? { exists: false, writable: false, missing: true, issue: 'missing' }
+				: { exists: false, writable: false, missing: false, issue: 'unavailable' };
+		}
+
 		try {
 			const constants = originalFs.constants;
 			originalFs.accessSync(dirPath, constants.R_OK | constants.W_OK);
-			return true;
+			return { exists: true, writable: true, missing: false, issue: null };
 		} catch (error) {
-			return false;
+			return { exists: true, writable: false, missing: false, issue: 'unwritable' };
 		}
+	},
+
+	/** 使用 original-fs 验证存档目录具有读写权限。 */
+	isSaveDirectoryWritable(dirPath) {
+		return this.getSaveDirectoryState(dirPath).writable;
+	},
+
+	/** 仅创建已配置存档目录的叶节点；不会递归创建游戏根目录或覆盖现有文件。 */
+	createMissingSaveDirectory(dirPath) {
+		const state = this.getSaveDirectoryState(dirPath);
+		if (state.exists) return { success: true, created: false };
+		if (!state.missing) {
+			return { success: false, message: state.issue === 'not-directory' ? '原版存档路径不是文件夹' : '原版存档文件夹无法访问' };
+		}
+
+		const parentDir = path.dirname(dirPath);
+		if (!this.isSaveDirectory(parentDir)) {
+			return { success: false, message: '原版存档文件夹的父目录不存在或无法访问' };
+		}
+		if (!this.isSaveDirectoryWritable(parentDir)) {
+			return { success: false, message: '原版存档文件夹的父目录不可写' };
+		}
+
+		try {
+			originalFs.mkdirSync(dirPath);
+		} catch (error) {
+			// 与其他进程竞争创建时，后续状态校验决定是否可继续。
+			if (error?.code !== 'EEXIST') {
+				Logger.error(`创建原版存档文件夹失败: ${dirPath}`, error);
+				return { success: false, message: '无法创建原版存档文件夹' };
+			}
+		}
+
+		const createdState = this.getSaveDirectoryState(dirPath);
+		return createdState.exists
+			? { success: true, created: true }
+			: { success: false, message: createdState.issue === 'not-directory' ? '原版存档路径不是文件夹' : '创建后无法访问原版存档文件夹' };
 	},
 
 	/**
@@ -592,50 +641,62 @@ const ModManagerApi = {
 	/** 返回外部存档来源目录的配置和可用状态. */
 	getSaveImportStatus() {
 		const saveImportDir = this.getConfiguredSaveImportDir();
-		const exists = saveImportDir !== null && this.isSaveDirectory(saveImportDir);
+		const state = saveImportDir
+			? this.getSaveDirectoryState(saveImportDir)
+			: { exists: false, missing: false, issue: null };
 		return {
 			path: saveImportDir,
 			configured: saveImportDir !== null,
-			exists,
-			count: exists ? this.listSaveFiles(saveImportDir).length : 0,
+			exists: state.exists,
+			missing: state.missing,
+			issue: state.issue,
+			count: state.exists ? this.listSaveFiles(saveImportDir).length : 0,
 		};
 	},
 
 	/**
 	 * 返回原版存档目录重定向的配置与可生效状态。
-	 * active 为 true 时，后续文件 API 可将 ../_storage 映射到 path。
+	 * active 为 true 表示目录已通过当前读写校验；启用且已配置时，游戏文件 API 仍会映射到 path，
+	 * 使游戏可重建暂时缺失的 _storage，而不会回退到独立版目录。
 	 */
 	getSaveStorageRedirectStatus() {
 		const config = this.readAppConfig();
 		const saveImportDir = this.getConfiguredSaveImportDir();
 		const configured = saveImportDir !== null;
-		const exists = configured && this.isSaveDirectory(saveImportDir);
-		const writable = exists && this.isSaveDirectoryWritable(saveImportDir);
+		const state = configured
+			? this.getSaveDirectoryState(saveImportDir)
+			: { exists: false, writable: false, missing: false, issue: null };
 		const enabled = config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] === true;
 		let message;
 		if (enabled && !configured) message = '请先选择原版存档文件夹';
-		else if (enabled && !exists) message = '原版存档文件夹无法访问, 请重新选择';
-		else if (enabled && !writable) message = '原版存档文件夹不可写';
+		else if (state.missing) message = enabled
+			? '原版存档文件夹尚未创建；游戏写入或恢复备份时可自动重建'
+			: '原版存档文件夹尚未创建，可在开启时创建';
+		else if (state.issue === 'not-directory') message = '原版存档路径不是文件夹';
+		else if (state.issue === 'unavailable') message = '原版存档文件夹无法访问';
+		else if (state.issue === 'unwritable') message = '原版存档文件夹不可写';
 
 		return {
 			enabled,
-			active: enabled && writable,
+			active: enabled && state.writable,
 			path: saveImportDir,
 			configured,
-			exists,
-			writable,
+			exists: state.exists,
+			writable: state.writable,
+			missing: state.missing,
+			issue: state.issue,
 			...(message ? { message } : {}),
 		};
 	},
 
 	/** 设置原版存档目录重定向开关；开启前必须完成实际文件操作检测。 */
-	setSaveStorageRedirectEnabled(enabled) {
-		const current = this.getSaveStorageRedirectStatus();
+	setSaveStorageRedirectEnabled(enabled, createMissingDirectory = false) {
+		let current = this.getSaveStorageRedirectStatus();
 		if (typeof enabled !== 'boolean') {
 			return { success: false, ...current, message: '存档重定向开关无效' };
 		}
 
-		if (enabled && (!current.configured || !current.exists)) {
+		if (enabled && !current.configured) {
 			const config = this.readAppConfig();
 			config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
 			const disabled = this.writeAppConfig(config);
@@ -644,6 +705,42 @@ const ModManagerApi = {
 				...(disabled ? this.getSaveStorageRedirectStatus() : current),
 				message: current.message || '原版存档文件夹无法访问，未启用直接使用原版存档',
 			};
+		}
+		if (enabled && !current.exists) {
+			if (current.missing && !createMissingDirectory) {
+				return {
+					success: false,
+					...current,
+					needsDirectoryCreation: true,
+					message: '原版存档文件夹尚未创建，确认后可创建并开启直接使用原版存档',
+				};
+			}
+			if (current.missing) {
+				const created = this.createMissingSaveDirectory(current.path);
+				if (created.success) current = this.getSaveStorageRedirectStatus();
+				else {
+					const config = this.readAppConfig();
+					config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
+					const disabled = this.writeAppConfig(config);
+					return {
+						success: false,
+						...(disabled ? this.getSaveStorageRedirectStatus() : current),
+						message: disabled
+							? `${created.message}，未启用直接使用原版存档。`
+							: `${created.message}，且无法保存关闭状态。`,
+					};
+				}
+			}
+			if (!current.exists) {
+				const config = this.readAppConfig();
+				config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
+				const disabled = this.writeAppConfig(config);
+				return {
+					success: false,
+					...(disabled ? this.getSaveStorageRedirectStatus() : current),
+					message: current.message || '原版存档文件夹无法访问，未启用直接使用原版存档',
+				};
+			}
 		}
 		if (enabled) {
 			const probe = this.testSaveDirectoryAccess(current.path);
@@ -1555,9 +1652,17 @@ const ModManagerApi = {
 	 * 存档重定向开启后必须使用原版存档目录；其不可用时拒绝操作，
 	 * 不得静默回退到独立版 _storage。
 	 */
-	getBackupStorageDirectory() {
+	getBackupStorageDirectory(options = {}) {
 		const redirectStatus = this.getSaveStorageRedirectStatus();
 		if (redirectStatus.enabled) {
+			const allowMissingRedirectDirectory = options.allowMissingRedirectDirectory === true;
+			if (allowMissingRedirectDirectory && redirectStatus.configured && redirectStatus.missing && redirectStatus.path) {
+				const parentDir = path.dirname(redirectStatus.path);
+				if (!this.isSaveDirectoryWritable(parentDir)) {
+					return { success: false, message: '原版存档文件夹的父目录不存在、无法访问或不可写' };
+				}
+				return { success: true, path: redirectStatus.path, redirected: true, missing: true };
+			}
 			if (!redirectStatus.active || !redirectStatus.path) {
 				return {
 					success: false,
@@ -1645,7 +1750,8 @@ const ModManagerApi = {
 	 * @returns {{ success: boolean, file?: string, count?: number, message?: string }}
 	 */
 	createBackup(name) {
-		const storage = this.getBackupStorageDirectory();
+		// 目录缺失时继续到下方返回 noSave；创建备份绝不创建空存档目录。
+		const storage = this.getBackupStorageDirectory({ allowMissingRedirectDirectory: true });
 		if (!storage.success) return { success: false, message: storage.message };
 		const storageDir = storage.path;
 		if (!originalFs.existsSync(storageDir)) {
@@ -1704,7 +1810,7 @@ const ModManagerApi = {
 		if (!zipPath || !originalFs.existsSync(zipPath)) {
 			return { success: false, message: '备份不存在' };
 		}
-		const storage = this.getBackupStorageDirectory();
+		const storage = this.getBackupStorageDirectory({ allowMissingRedirectDirectory: true });
 		if (!storage.success) return { success: false, message: storage.message };
 		const storageDir = storage.path;
 		// 重定向目录可能位于不同磁盘。目录切换依赖同卷 rename，

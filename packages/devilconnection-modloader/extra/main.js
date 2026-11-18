@@ -314,9 +314,9 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('modmanager:getSaveStorageRedirectStatus', async () => {
 		return ModManagerApi.getSaveStorageRedirectStatus();
 	});
-	// SetSaveStorageRedirectEnabled: 设置原版存档目录重定向开关；开启前验证目录可读写。
-	ipcMain.handle('modmanager:setSaveStorageRedirectEnabled', async (event, enabled) => {
-		return ModManagerApi.setSaveStorageRedirectEnabled(enabled === true);
+	// SetSaveStorageRedirectEnabled: 设置原版存档目录重定向开关；确认后可创建缺失的已配置存档目录。
+	ipcMain.handle('modmanager:setSaveStorageRedirectEnabled', async (event, enabled, createMissingDirectory) => {
+		return ModManagerApi.setSaveStorageRedirectEnabled(enabled === true, createMissingDirectory === true);
 	});
 	// SelectSaveImportDirectory: 选择并保存原版存档来源目录, 不复制文件.
 	ipcMain.handle('modmanager:selectSaveImportDirectory', async () => {

@@ -24,7 +24,7 @@ if (!manager) {
 | 数据目录 | `getDataDirectory`、`openDataDirectory` | 获取或在系统文件管理器中打开可写数据目录。 |
 | 游戏安装 | `getGameLaunchStatus`、`selectGameLaunchPath`、`clearGameLaunchPath` | 选择官方启动文件或应用包，自动识别游戏 ASAR 与原版存档目录。 |
 | 游戏核心 | `getGameCoreStatus`、`selectGameCoreFile`、`clearGameCoreFile` | 选择、检查或清除作为底层资源的游戏 ASAR。 |
-| 存档迁移 | `getSaveImportStatus`、`selectSaveImportDirectory`、`clearSaveImportDirectory`、`importSaves` | 从外部版本复制顶层 `.sav` 存档。 |
+| 存档迁移与重定向 | `getSaveImportStatus`、`selectSaveImportDirectory`、`clearSaveImportDirectory`、`importSaves`、`getSaveStorageRedirectStatus`、`setSaveStorageRedirectEnabled` | 从外部版本复制顶层 `.sav` 存档，或直接使用原版存档目录。 |
 | 版本信息 | `getModLoaderPackageInfo` | 读取 ModLoader 包名和版本。 |
 
 ## 文件浏览
@@ -201,6 +201,8 @@ interface GameLaunchStatus {
 
 存档来源目录只读取顶层的 `.sav` 文件。`selectSaveImportDirectory()` 只保存来源目录；实际复制发生在 `importSaves()`。若独立版已有存档，首次调用会返回确认请求，调用方必须让用户确认后以 `true` 重试。
 
+“直接使用原版存档”开启前会验证创建、读写、重命名和删除权限。智能识别出的新游戏若尚未生成 `_storage`，首次调用 `setSaveStorageRedirectEnabled(true)` 会返回 `needsDirectoryCreation: true`；经用户确认后以第二个参数 `true` 重试，管理器只会创建该已配置路径的叶目录并重新验证权限。已开启后游戏删除 `_storage` 时，游戏的创建/写入操作可重建它；恢复备份也会通过原子目录切换重建它。
+
 | 方法 | 参数 | 返回值 |
 | --- | --- | --- |
 | `getSaveImportStatus()` | 无 | `Promise<{ path: string \| null, configured: boolean, exists: boolean, count: number }>` |
@@ -208,6 +210,8 @@ interface GameLaunchStatus {
 | `setSaveImportDirectoryPath(sourcePath)` | `sourcePath: string` | 校验并保存拖入的存档文件夹绝对路径。 |
 | `clearSaveImportDirectory()` | 无 | `Promise<{ success: boolean, message?: string }>` |
 | `importSaves(replaceExisting?)` | `replaceExisting?: boolean` | `Promise<SaveImportResult>` |
+| `getSaveStorageRedirectStatus()` | 无 | `Promise<{ enabled, active, path, configured, exists, writable, missing, issue, message? }>` |
+| `setSaveStorageRedirectEnabled(enabled, createMissingDirectory?)` | `enabled: boolean, createMissingDirectory?: boolean` | `Promise<{ success, needsDirectoryCreation?, ...status }>` |
 
 ```ts
 interface SaveImportResult {

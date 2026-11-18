@@ -233,9 +233,9 @@ const modManagerAPI = {
 		return await ipcRenderer.invoke('modmanager:getSaveStorageRedirectStatus');
 	},
 
-	/** 开启或关闭原版存档目录重定向。开启前主进程会验证来源目录可读写。 */
-	setSaveStorageRedirectEnabled: async (enabled) => {
-		return await ipcRenderer.invoke('modmanager:setSaveStorageRedirectEnabled', enabled === true);
+	/** 开启或关闭原版存档目录重定向；createMissingDirectory 经用户确认后才允许创建缺失目录。 */
+	setSaveStorageRedirectEnabled: async (enabled, createMissingDirectory) => {
+		return await ipcRenderer.invoke('modmanager:setSaveStorageRedirectEnabled', enabled === true, createMissingDirectory === true);
 	},
 
 	/** 打开目录选择对话框并保存原版存档来源目录. */
