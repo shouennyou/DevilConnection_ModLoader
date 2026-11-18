@@ -413,6 +413,11 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModManagerApi.importBackup(result.filePaths[0]);
 	});
 
+	// ImportFromPath: 从渲染进程已验证的绝对路径导入 ZIP 备份, 用于拖放导入.
+	ipcMain.handle('backup:importFromPath', async (event, sourcePath) => {
+		return ModManagerApi.importBackup(sourcePath || '');
+	});
+
 	// Cleanup: 输入 {retainDays, retainCount}. 按保留策略清理未锁定的备份, 返回 Promise<{success, deleted}>.
 	ipcMain.handle('backup:cleanup', async (event, { retainDays, retainCount }) => {
 		return ModManagerApi.cleanupBackups(Number(retainDays) || 0, Number(retainCount) || 0);

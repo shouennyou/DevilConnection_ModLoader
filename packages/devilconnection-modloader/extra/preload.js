@@ -13,7 +13,13 @@ function getDropTarget(event) {
 	for (const node of eventPath) {
 		if (!node || typeof node.getAttribute !== 'function') continue;
 		const target = node.getAttribute('data-modmanager-drop-target');
-		if (target === 'game-launch' || target === 'game-core' || target === 'save-import') return target;
+		if (
+			target === 'game-launch'
+			|| target === 'game-core'
+			|| target === 'save-import'
+			|| target === 'mod-import'
+			|| target === 'backup-import'
+		) return target;
 	}
 	return null;
 }
@@ -29,6 +35,10 @@ function getDroppedLocalPath(file) {
 	return typeof file.path === 'string' && file.path.trim() ? file.path : '';
 }
 
+function isExternalFileDrag(event) {
+	return Array.from(event.dataTransfer?.types || []).includes('Files');
+}
+
 function notifyDroppedPath(payload) {
 	if (typeof droppedPathHandler !== 'function') return;
 	try {
@@ -41,22 +51,31 @@ function notifyDroppedPath(payload) {
 // File.path 不是标准 Web API，且在 contextIsolation 的主世界中可能不可用。
 // 在 preload 隔离世界读取原始 DragEvent 后，仅向前端传递经过整理的路径和类型信息。
 document.addEventListener('dragover', event => {
-	if (getDropTarget(event)) event.preventDefault();
+	if (getDropTarget(event) && isExternalFileDrag(event)) event.preventDefault();
 }, true);
 
 document.addEventListener('drop', event => {
 	const target = getDropTarget(event);
-	if (!target) return;
+	if (!target || !isExternalFileDrag(event)) return;
 	event.preventDefault();
 	const files = Array.from(event.dataTransfer?.files || []);
-	const file = files[0] || null;
-	const entry = event.dataTransfer?.items?.[0]?.webkitGetAsEntry?.();
+	const dataTransferItems = Array.from(event.dataTransfer?.items || []);
+	const items = files.map((file, index) => {
+		const entry = dataTransferItems[index]?.webkitGetAsEntry?.();
+		return {
+			fileName: file?.name || '',
+			entryType: entry?.isDirectory ? 'directory' : entry?.isFile ? 'file' : 'unknown',
+			sourcePath: getDroppedLocalPath(file) || null,
+		};
+	});
+	const firstItem = items[0] || { fileName: '', entryType: 'unknown', sourcePath: null };
 	notifyDroppedPath({
 		target,
 		fileCount: files.length,
-		fileName: file?.name || '',
-		entryType: entry?.isDirectory ? 'directory' : entry?.isFile ? 'file' : 'unknown',
-		sourcePath: getDroppedLocalPath(file) || null,
+		fileName: firstItem.fileName,
+		entryType: firstItem.entryType,
+		sourcePath: firstItem.sourcePath,
+		items,
 	});
 }, true);
 
@@ -398,6 +417,10 @@ const backupAPI = {
 	/** 导入外部备份(弹开文件对话框),返回 {success, file?, canceled?, message?} */
 	import: async () => {
 		return await ipcRenderer.invoke('backup:import');
+	},
+	/** 导入指定绝对路径的外部备份 ZIP 文件,返回 {success, file?, message?} */
+	importFromPath: async sourcePath => {
+		return await ipcRenderer.invoke('backup:importFromPath', sourcePath || '');
 	},
 	/** 按保留策略清理备份(锁定的排除),返回 {success, deleted} */
 	cleanup: async (retainDays, retainCount) => {
