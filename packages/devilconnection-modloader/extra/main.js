@@ -278,6 +278,22 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 	ipcMain.handle('modmanager:getGameCoreStatus', async () => {
 		return ModManagerApi.getGameCoreStatus();
 	});
+	// GetGameLaunchStatus: 返回游戏启动文件及自动识别出的核心/存档路径状态.
+	ipcMain.handle('modmanager:getGameLaunchStatus', async () => {
+		return ModManagerApi.getGameLaunchStatus();
+	});
+	// SelectGameLaunchPath: 选择 DevilConnection.exe 或 DevilConnection.app 并自动识别路径.
+	ipcMain.handle('modmanager:selectGameLaunchPath', async () => {
+		return ModManagerApi.selectGameLaunchPath();
+	});
+	// SetGameLaunchPath: 校验并保存由受信任拖放区提交的游戏启动文件或应用包绝对路径.
+	ipcMain.handle('modmanager:setGameLaunchPath', async (event, sourcePath) => {
+		return ModManagerApi.setGameLaunchPath(sourcePath);
+	});
+	// ClearGameLaunchPath: 仅清除游戏启动文件配置.
+	ipcMain.handle('modmanager:clearGameLaunchPath', async () => {
+		return ModManagerApi.clearGameLaunchPath();
+	});
 	// SelectGameCoreFile: 打开文件选择对话框并保存游戏核心路径, 返回 Promise<{success, canceled?, path?, message?}>.
 	ipcMain.handle('modmanager:selectGameCoreFile', async () => {
 		return ModManagerApi.selectGameCoreFile();

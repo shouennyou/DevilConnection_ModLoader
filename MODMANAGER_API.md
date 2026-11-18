@@ -22,6 +22,7 @@ if (!manager) {
 | 本地模组与更新 | `selectLocalModFile`、`importLocalModFile`、`downloadAndReplace`、`onDownloadProgress` | 选择、导入、下载和替换 ASAR 模组。 |
 | 加载顺序与网络 | `setModOrder`、`fetchText` | 更新启用状态/优先级，或由主进程发起 HTTP(S) GET。 |
 | 数据目录 | `getDataDirectory`、`openDataDirectory` | 获取或在系统文件管理器中打开可写数据目录。 |
+| 游戏安装 | `getGameLaunchStatus`、`selectGameLaunchPath`、`clearGameLaunchPath` | 选择官方启动文件或应用包，自动识别游戏 ASAR 与原版存档目录。 |
 | 游戏核心 | `getGameCoreStatus`、`selectGameCoreFile`、`clearGameCoreFile` | 选择、检查或清除作为底层资源的游戏 ASAR。 |
 | 存档迁移 | `getSaveImportStatus`、`selectSaveImportDirectory`、`clearSaveImportDirectory`、`importSaves` | 从外部版本复制顶层 `.sav` 存档。 |
 | 版本信息 | `getModLoaderPackageInfo` | 读取 ModLoader 包名和版本。 |
@@ -151,6 +152,36 @@ interface FetchTextResult {
   success: boolean
   status?: number
   text?: string
+  message?: string
+}
+```
+
+## 游戏安装
+
+选择官方启动文件后，管理器按固定目录结构写入游戏核心与原版存档目录：
+
+- Windows：`DevilConnection.exe` 同级的 `resources/app.asar` 与 `_storage`。
+- macOS：`DevilConnection.app/Contents/Resources/app.asar` 与应用包同级的 `_storage`。
+
+无法找到游戏核心时，选择不会保存任何路径；原版存档目录尚未创建时会保存其推导路径，供恢复备份时创建。自动识别也会关闭“直接使用原版存档”，需重新完成权限检测后才能开启。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `getGameLaunchStatus()` | 无 | `Promise<GameLaunchStatus>` |
+| `selectGameLaunchPath()` | 无 | `Promise<GameLaunchResult>` |
+| `setGameLaunchPath(sourcePath)` | `sourcePath: string` | 校验并保存拖入的官方启动文件或应用包绝对路径。 |
+| `clearGameLaunchPath()` | 无 | `Promise<{ success: boolean, message?: string }>` |
+
+```ts
+interface GameLaunchStatus {
+  path: string | null
+  configured: boolean
+  exists: boolean
+  platform: 'windows' | 'macos' | null
+  gameCorePath: string | null
+  gameCoreExists: boolean
+  saveImportDir: string | null
+  saveImportExists: boolean
   message?: string
 }
 ```

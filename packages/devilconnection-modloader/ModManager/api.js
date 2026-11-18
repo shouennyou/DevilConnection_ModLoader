@@ -19,6 +19,7 @@ const {
 	WORKSHOP_CACHE_FILE,
 	MOD_ORDER_FILE,
 	APP_CONFIG_FILE,
+	GAME_LAUNCH_PATH_KEY,
 	GAME_CORE_PATH_KEY,
 	SAVE_IMPORT_DIR_KEY,
 	SAVE_STORAGE_REDIRECT_ENABLED_KEY,
@@ -200,6 +201,134 @@ const ModManagerApi = {
 			Logger.error(`写入 ${APP_CONFIG_FILE} 失败`, error);
 			return false;
 		}
+	},
+
+	/** 从应用配置中读取经过规范化的游戏启动文件绝对路径. */
+	getConfiguredGameLaunchPath() {
+		const value = this.readAppConfig()[GAME_LAUNCH_PATH_KEY];
+		if (typeof value !== 'string' || !value.trim()) return null;
+		const gameLaunchPath = path.normalize(value.trim());
+		return path.isAbsolute(gameLaunchPath) ? gameLaunchPath : null;
+	},
+
+	/**
+	 * 根据官方启动文件的固定相对位置识别游戏核心与原版存档目录。
+	 * Windows: DevilConnection.exe + resources/app.asar + _storage.
+	 * macOS: DevilConnection.app + Contents/Resources/app.asar + 同级 _storage.
+	 */
+	detectGameInstallation(sourcePath) {
+		if (typeof sourcePath !== 'string' || !sourcePath.trim() || !path.isAbsolute(sourcePath)) {
+			return { success: false, message: '请选择 DevilConnection.exe 或 DevilConnection.app' };
+		}
+		const launchPath = path.normalize(sourcePath.trim());
+		let stat;
+		try {
+			stat = originalFs.statSync(launchPath);
+		} catch (error) {
+			return { success: false, message: '所选游戏启动文件无法访问' };
+		}
+
+		const name = path.basename(launchPath).toLowerCase();
+		let platform;
+		let installDir;
+		let gameCorePath;
+		if (stat.isFile() && name === 'devilconnection.exe') {
+			platform = 'windows';
+			installDir = path.dirname(launchPath);
+			gameCorePath = path.join(installDir, 'resources', 'app.asar');
+		} else if (stat.isDirectory() && name === 'devilconnection.app') {
+			platform = 'macos';
+			installDir = path.dirname(launchPath);
+			gameCorePath = path.join(launchPath, 'Contents', 'Resources', 'app.asar');
+		} else {
+			return { success: false, message: '请选择 DevilConnection.exe 或 DevilConnection.app' };
+		}
+
+		const saveImportDir = path.join(installDir, STORAGE_DIR);
+		return {
+			success: true,
+			path: launchPath,
+			platform,
+			gameCorePath,
+			gameCoreExists: this.isGameCoreFile(gameCorePath),
+			saveImportDir,
+			saveImportExists: this.isSaveDirectory(saveImportDir),
+		};
+	},
+
+	/** 返回游戏启动文件配置及自动识别出的路径状态. */
+	getGameLaunchStatus() {
+		const gameLaunchPath = this.getConfiguredGameLaunchPath();
+		const detected = gameLaunchPath ? this.detectGameInstallation(gameLaunchPath) : null;
+		return {
+			path: gameLaunchPath,
+			configured: gameLaunchPath !== null,
+			exists: detected?.success === true,
+			platform: detected?.success ? detected.platform : null,
+			gameCorePath: detected?.success ? detected.gameCorePath : null,
+			gameCoreExists: detected?.success === true && detected.gameCoreExists,
+			saveImportDir: detected?.success ? detected.saveImportDir : null,
+			saveImportExists: detected?.success === true && detected.saveImportExists,
+			...(detected && !detected.success ? { message: detected.message } : {}),
+		};
+	},
+
+	/** 保存游戏启动文件并更新自动识别出的游戏核心和原版存档目录. */
+	setGameLaunchPath(sourcePath) {
+		const detected = this.detectGameInstallation(sourcePath);
+		if (!detected.success) return detected;
+		if (!detected.gameCoreExists) {
+			return { success: false, message: '未在游戏安装目录中找到 resources/app.asar' };
+		}
+
+		const config = this.readAppConfig();
+		config[GAME_LAUNCH_PATH_KEY] = detected.path;
+		config[GAME_CORE_PATH_KEY] = detected.gameCorePath;
+		config[SAVE_IMPORT_DIR_KEY] = detected.saveImportDir;
+		// 新的自动识别目录尚未完成实际权限检测，不能沿用旧目录的启用状态。
+		config[SAVE_STORAGE_REDIRECT_ENABLED_KEY] = false;
+		if (!this.writeAppConfig(config)) {
+			return { success: false, message: '保存游戏启动文件路径失败' };
+		}
+
+		return {
+			success: true,
+			...this.getGameLaunchStatus(),
+			...(detected.saveImportExists ? {} : { message: '已识别原版存档位置；文件夹尚未创建，可在恢复备份时创建。' }),
+		};
+	},
+
+	/** 由主进程选择游戏启动文件或 macOS 应用包. */
+	async selectGameLaunchPath() {
+		const { BrowserWindow, dialog } = require('electron');
+		const isMac = process.platform === 'darwin';
+		const options = isMac
+			? {
+				title: '选择 DevilConnection.app',
+				properties: ['openDirectory', 'treatPackageAsDirectory'],
+			}
+			: {
+				title: '选择 DevilConnection.exe',
+				properties: ['openFile'],
+				filters: [{ name: 'DevilConnection', extensions: ['exe'] }],
+			};
+		const parent = BrowserWindow.getFocusedWindow();
+		const result = parent
+			? await dialog.showOpenDialog(parent, options)
+			: await dialog.showOpenDialog(options);
+		if (result.canceled || result.filePaths.length === 0) {
+			return { success: false, canceled: true };
+		}
+		return this.setGameLaunchPath(result.filePaths[0]);
+	},
+
+	/** 清除游戏启动文件配置，不删除已识别并保存的游戏核心或存档路径。 */
+	clearGameLaunchPath() {
+		const config = this.readAppConfig();
+		delete config[GAME_LAUNCH_PATH_KEY];
+		return this.writeAppConfig(config)
+			? { success: true }
+			: { success: false, message: '清除游戏启动文件路径失败' };
 	},
 
 	/** 从应用配置中读取经过规范化的游戏核心绝对路径. */

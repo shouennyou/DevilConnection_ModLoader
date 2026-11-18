@@ -27,6 +27,7 @@ const MOD_CONFIG_CACHE_FILE = 'mod-config.json';
 const WORKSHOP_CACHE_FILE = 'workshop.json';
 const MOD_ORDER_FILE = 'mod_order.json';
 const APP_CONFIG_FILE = 'mod-manager.json';
+const GAME_LAUNCH_PATH_KEY = 'gameLaunchPath';
 const GAME_CORE_PATH_KEY = 'gameCorePath';
 const SAVE_IMPORT_DIR_KEY = 'saveImportDir';
 const SAVE_STORAGE_REDIRECT_ENABLED_KEY = 'saveStorageRedirectEnabled';
@@ -148,6 +149,7 @@ module.exports = {
 	WORKSHOP_CACHE_FILE,
 	MOD_ORDER_FILE,
 	APP_CONFIG_FILE,
+	GAME_LAUNCH_PATH_KEY,
 	GAME_CORE_PATH_KEY,
 	SAVE_IMPORT_DIR_KEY,
 	SAVE_STORAGE_REDIRECT_ENABLED_KEY,

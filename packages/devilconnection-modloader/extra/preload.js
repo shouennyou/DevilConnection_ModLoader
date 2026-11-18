@@ -13,7 +13,7 @@ function getDropTarget(event) {
 	for (const node of eventPath) {
 		if (!node || typeof node.getAttribute !== 'function') continue;
 		const target = node.getAttribute('data-modmanager-drop-target');
-		if (target === 'game-core' || target === 'save-import') return target;
+		if (target === 'game-launch' || target === 'game-core' || target === 'save-import') return target;
 	}
 	return null;
 }
@@ -186,6 +186,26 @@ const modManagerAPI = {
 	/** 返回 Promise<{path, configured, exists}>. */
 	getGameCoreStatus: async () => {
 		return await ipcRenderer.invoke('modmanager:getGameCoreStatus');
+	},
+
+	/** 返回游戏启动文件及自动识别出的游戏核心、原版存档目录状态. */
+	getGameLaunchStatus: async () => {
+		return await ipcRenderer.invoke('modmanager:getGameLaunchStatus');
+	},
+
+	/** 选择 DevilConnection.exe 或 DevilConnection.app，并自动识别游戏核心和原版存档目录. */
+	selectGameLaunchPath: async () => {
+		return await ipcRenderer.invoke('modmanager:selectGameLaunchPath');
+	},
+
+	/** 校验并保存拖入的 DevilConnection.exe 或 DevilConnection.app 路径。 */
+	setGameLaunchPath: async sourcePath => {
+		return await ipcRenderer.invoke('modmanager:setGameLaunchPath', sourcePath || '');
+	},
+
+	/** 清除游戏启动文件配置，不删除已识别出的其他路径。 */
+	clearGameLaunchPath: async () => {
+		return await ipcRenderer.invoke('modmanager:clearGameLaunchPath');
 	},
 
 	/** 打开主进程文件选择对话框并保存游戏核心路径, 返回 Promise<{success, canceled?, path?, message?}>. */
