@@ -319,7 +319,9 @@ function buildPatchedResource(relative) {
  * 或补丁缺少基础文件时返回 null，调用方应回退至普通优先级路径解析。
  */
 function resolvePatchedResourcePath(relative) {
-	if (!relative || !getPatchPath(relative)) return null;
+	// IPC 接口会在运行时初始化前完成注册；此时尚无已扫描的资源层，
+	// 交由调用方按普通优先级路径回退，避免在管理器窗口中提前读取时崩溃。
+	if (!core || !relative || !getPatchPath(relative)) return null;
 	let patched = PATCHED_FS_CACHE.get(relative);
 	if (patched === undefined) {
 		const text = buildPatchedResource(relative);
