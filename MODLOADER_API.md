@@ -52,13 +52,13 @@ const api = window.modloader
 
 | 路径前缀 | 读取视图 | 支持的操作 |
 | --- | --- | --- |
-| `game-resources/` | 按启用模组的优先级查找，未命中时回退到当前选定的游戏核心 ASAR。 | `readFile*`、`stat*`、`readdir*`、`createReadStream`、作为 `copyFile*` 的源路径。 |
+| `game-resources/` | 游戏最终资源视图：按启用模组优先级覆盖，并按“游戏核心 → 低优先级模组 → 高优先级模组”的顺序应用同名 `.patch`；未命中时回退到当前选定的游戏核心 ASAR。 | `readFile*`、`stat*`、`readdir*`、`createReadStream`、作为 `copyFile*` 的源路径。 |
 | `original-game-resources/` | 忽略全部模组，只读取当前选定的游戏核心 ASAR。 | 同上。 |
 
 例如：
 
 ```js
-// 覆盖后的资源：优先取得最高优先级模组中的 index.html。
+// 游戏最终资源：取得覆盖及 .patch 合成后的 index.html。
 const overridden = await window.modloader.readFile('game-resources/index.html')
 
 // 游戏核心的原始资源：不受任何模组覆盖影响。

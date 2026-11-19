@@ -88,15 +88,8 @@ function applyFSHooks() {
 			const candidate = extractRelative(p) ?? (!path.isAbsolute(p) ? p : null);
 			const relative = normalizeRelative(candidate, 'fs.readFileSync');
 			if (candidate !== null && !relative) return orig.readFileSync(p, o);
-			if (relative && getPatchPath(relative)) {
-				let patched = PATCHED_FS_CACHE.get(relative);
-				if (patched === undefined) {
-					const text = buildPatchedResource(relative);
-					patched = text === null ? null : cachePatchedResource(relative, text);
-					PATCHED_FS_CACHE.set(relative, patched);
-				}
-				if (patched) return orig.readFileSync(patched, o);
-			}
+			const patched = relative && resolvePatchedResourcePath(relative);
+			if (patched) return orig.readFileSync(patched, o);
 		}
 		return orig.readFileSync(typeof p === 'string' ? mapPath(p) : p, o);
 	};
@@ -319,6 +312,23 @@ function buildPatchedResource(relative) {
 	return hasSource ? text : null;
 }
 
+/**
+ * 解析资源的最终补丁缓存路径。
+ *
+ * 与文件系统和协议拦截使用相同的补丁合成器；没有对应补丁、资源不可合成，
+ * 或补丁缺少基础文件时返回 null，调用方应回退至普通优先级路径解析。
+ */
+function resolvePatchedResourcePath(relative) {
+	if (!relative || !getPatchPath(relative)) return null;
+	let patched = PATCHED_FS_CACHE.get(relative);
+	if (patched === undefined) {
+		const text = buildPatchedResource(relative);
+		patched = text === null ? null : cachePatchedResource(relative, text);
+		PATCHED_FS_CACHE.set(relative, patched);
+	}
+	return patched;
+}
+
 function getPatchCachePaths() {
 	const dataPath = core.Env.getDataPath();
 	return {
@@ -491,5 +501,6 @@ module.exports = {
 	applyFSHooks,
 	setupProtocol,
 	registerProtocolScheme,
-	getResourceProtocolMode
+	getResourceProtocolMode,
+	resolvePatchedResourcePath
 };

@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { Env, Logger, PluginManager, electronFs } = require('./core');
+const { resolvePatchedResourcePath } = require('./hooks');
 const { resolveSaveStorageRedirect } = require('../utils/SaveStorageRedirect');
 
 let originalFs = fs;
@@ -125,7 +126,7 @@ function readOnlyGameResourceResult() {
 /**
  * 解析保留的游戏资源虚拟目录. 返回 null 表示普通资源路径.
  * 虚拟目录仅用于读取:
- * - game-resources: 已启用模组按优先级覆盖, 最后回退游戏核心
+ * - game-resources: 已启用模组按优先级覆盖并应用 .patch, 最后回退游戏核心
  * - original-game-resources: 仅当前选定的游戏核心
  */
 function parseGameResourcePath(inputPath) {
@@ -151,7 +152,11 @@ function parseGameResourcePath(inputPath) {
 
 function resolveGameResourcePath(resource) {
 	if (!resource || resource.invalid || !resource.relative) return null;
-	if (resource.scope === 'overlay') return PluginManager.resolvePath(resource.relative);
+	if (resource.scope === 'overlay') {
+		// 补丁结果被缓存为实体文件，令 readFile、stat、流和 copyFile 源路径
+		// 与游戏运行时的资源拦截使用同一份最终内容。
+		return resolvePatchedResourcePath(resource.relative) || PluginManager.resolvePath(resource.relative);
+	}
 	const gameCorePath = PluginManager.gameCorePath;
 	if (!gameCorePath) return null;
 	return path.join(gameCorePath, ...resource.relative.split('/'));
