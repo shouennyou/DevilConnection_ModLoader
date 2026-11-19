@@ -67,6 +67,8 @@ const original = await window.modloader.readFile('original-game-resources/index.
 
 `readdir('game-resources/目录')` 返回合并后的目录视图；同名目录项由较高优先级的模组获胜。两个虚拟根依赖模组管理器中已选定的游戏核心 ASAR；未配置核心时，原始视图及未被模组命中的覆盖视图返回 `null`。
 
+对支持文本补丁的资源，模组还可提供 `文件名.<variant>.patch` 作为版本候选，例如 `sample.js.game-1.0.3.patch`。`variant` 仅允许字母、数字、`.`、`_`、`-`；包含独立 `bak` 或 `backup` 标记的候选会被忽略。具名候选按自然文件名升序尝试，第一个完整应用成功的候选获胜；旧式 `文件名.patch` 固定作为最后回退。
+
 当虚拟根可用时，`readdir('')` 和 `readdirSync('')` 会在 `resources` 根目录的结果中列出它。`game-resources` 在存在已加载资源来源时出现；`original-game-resources` 仅在已选定有效游戏核心时出现。两个名称均为保留名称，`stat*('game-resources')` 与 `stat*('original-game-resources')` 会返回只读虚拟目录状态。
 
 ## 通用结果格式

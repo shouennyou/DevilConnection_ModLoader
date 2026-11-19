@@ -144,16 +144,56 @@ function getResourcePath(requestUrl) {
 	}
 }
 
-/** 返回资源对应的同名补丁路径，例如 tyrano/libs/apng.js.patch。 */
-function getPatchPath(relative) {
+/** 判断资源是否支持文本补丁。 */
+function isPatchableResource(relative) {
 	const name = path.posix.basename(relative);
 	const extension = path.posix.extname(name).toLowerCase();
-	if (!PATCHABLE_EXTENSIONS.has(extension) && name.toLowerCase() !== '.gitkeep') return null;
-	return `${relative}.patch`;
+	return PATCHABLE_EXTENSIONS.has(extension) || name.toLowerCase() === '.gitkeep';
 }
 
 function getLayerPath(layerPath, relative) {
 	return path.join(layerPath, ...relative.split('/'));
+}
+
+/**
+ * 返回一个资源在指定层内的补丁候选。
+ *
+ * 支持 `foo.js.patch` 和 `foo.js.<variant>.patch`；variant 仅允许字母、数字、
+ * 点、下划线和连字符。包含独立 `bak` 或 `backup` 标记的 variant 会被忽略。
+ * 具名候选按自然文件名升序尝试，旧式无标识 `.patch` 固定作为最终回退。
+ */
+function getPatchCandidates(layerPath, relative) {
+	if (!isPatchableResource(relative)) return [];
+	const name = path.posix.basename(relative);
+	const directory = path.posix.dirname(relative);
+	const directoryPath = directory === '.' ? layerPath : getLayerPath(layerPath, directory);
+	let entries;
+	try {
+		entries = fs.readdirSync(directoryPath);
+	} catch (error) {
+		return [];
+	}
+
+	const defaultName = `${name}.patch`;
+	const prefix = `${name}.`;
+	const suffix = '.patch';
+	const candidates = [];
+	for (const entry of entries) {
+		if (entry === defaultName) {
+			candidates.push({ name: entry, path: getLayerPath(layerPath, directory === '.' ? entry : `${directory}/${entry}`), isDefault: true });
+			continue;
+		}
+		if (!entry.startsWith(prefix) || !entry.endsWith(suffix)) continue;
+		const variant = entry.slice(prefix.length, -suffix.length);
+		if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(variant)) continue;
+		if (variant.split(/[._-]+/).some(part => /^(?:bak|backup)$/i.test(part))) continue;
+		candidates.push({ name: entry, path: getLayerPath(layerPath, directory === '.' ? entry : `${directory}/${entry}`), isDefault: false });
+	}
+
+	return candidates.sort((a, b) => {
+		if (a.isDefault !== b.isDefault) return a.isDefault ? 1 : -1;
+		return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+	});
 }
 
 /** PatchWeaver 以 UTF-8（无 BOM）和 LF 作为补丁上下文的统一文本表示。 */
@@ -214,14 +254,14 @@ function parseUnifiedDocument(document) {
 
 /**
  * 按游戏核心、低优先级模组到高优先级模组的顺序构建文本。
- * 同一层内完整文件覆盖当前内容，随后才应用此层的同名补丁。
+ * 同一层内完整文件覆盖当前内容，随后按候选顺序成功应用一个同名补丁。
  */
 function buildPatchedResource(relative) {
-	const patchRelative = getPatchPath(relative);
-	if (!patchRelative) return null;
+	if (!isPatchableResource(relative)) return null;
 
 	const layers = core.PluginManager.loadedPlugins;
-	if (!layers.some(layer => fs.existsSync(getLayerPath(layer, patchRelative)))) return null;
+	const candidatesByLayer = new Map(layers.map(layer => [layer, getPatchCandidates(layer, relative)]));
+	if (![...candidatesByLayer.values()].some(candidates => candidates.length > 0)) return null;
 
 	let text = null;
 	let hasSource = false;
@@ -237,75 +277,67 @@ function buildPatchedResource(relative) {
 			}
 		}
 
-		const patchPath = getLayerPath(layer, patchRelative);
-		if (!fs.existsSync(patchPath)) continue;
+		const candidates = candidatesByLayer.get(layer);
+		if (!candidates.length) continue;
 		if (!hasSource) {
 			patchReport.recordFailure({
 				layerPath: layer,
-				patchPath,
+				patchPath: candidates.map(candidate => candidate.path).join(', '),
 				targetPath: relative,
 				format: 'unknown',
 				code: 'missing-base-file',
-				message: '找不到补丁所需的基础文件'
+				message: '找不到补丁候选所需的基础文件'
 			});
-			core.Logger.warn(`跳过补丁（缺少基础文件）: ${patchPath}`);
+			core.Logger.warn(`跳过补丁候选（缺少基础文件）: ${candidates.map(candidate => candidate.path).join(', ')}`);
 			continue;
 		}
 
-		try {
-			const document = normalizePatchText(core.electronFs.readFileSync(patchPath, 'utf-8'));
-			if (/^(?:Index: .*\n=+\n)?--- [^\n]*\n\+\+\+ /m.test(document)) {
-				const unified = parseUnifiedDocument(document);
-				const files = require('diff').parsePatch(unified.document);
-				if (files.length !== 1 || files[0].hunks.length === 0) {
-					throw new Error('Unified diff 必须包含单个文件和至少一个修改片段');
+		const failures = [];
+		let applied = false;
+		for (const candidate of candidates) {
+			try {
+				const document = normalizePatchText(core.electronFs.readFileSync(candidate.path, 'utf-8'));
+				if (/^(?:Index: .*\n=+\n)?--- [^\n]*\n\+\+\+ /m.test(document)) {
+					const unified = parseUnifiedDocument(document);
+					const files = require('diff').parsePatch(unified.document);
+					if (files.length !== 1 || files[0].hunks.length === 0) {
+						throw new Error('Unified diff 必须包含单个文件和至少一个修改片段');
+					}
+					const result = applyStandardDiff(text, unified.document, unified.options);
+					if (!result.success) {
+						failures.push(`${candidate.name}: ${result.error.code}: ${result.error.message}`);
+						continue;
+					}
+					text = result.content;
+					patchReport.recordApplied({ layerPath: layer, patchPath: candidate.path, targetPath: relative, format: 'unified' });
+					applied = true;
+					break;
 				}
-				const result = applyStandardDiff(text, unified.document, unified.options);
-				if (!result.success) {
-					patchReport.recordFailure({
-						layerPath: layer,
-						patchPath,
-						targetPath: relative,
-						format: 'unified',
-						code: 'unified-apply-failed',
-						message: 'Unified diff 无法应用到当前文件',
-						detail: `${result.error.code}: ${result.error.message}`
-					});
-					core.Logger.warn(`跳过 Unified diff 补丁: ${patchPath} (${result.error.code}: ${result.error.message})`);
+				const parsed = parsePatchDocument(document);
+				const [nextText, results] = applyPatches(parsed.patches, text, parsed.options);
+				if (!results.every(Boolean)) {
+					failures.push(`${candidate.name}: ${results.filter(Boolean).length}/${results.length} 个修改片段匹配成功`);
 					continue;
 				}
-				text = result.content;
-				patchReport.recordApplied({ layerPath: layer, patchPath, targetPath: relative, format: 'unified' });
-				continue;
+				text = nextText;
+				patchReport.recordApplied({ layerPath: layer, patchPath: candidate.path, targetPath: relative, format: 'dmp' });
+				applied = true;
+				break;
+			} catch (error) {
+				failures.push(`${candidate.name}: ${error?.message || String(error)}`);
 			}
-			const { patches, options } = parsePatchDocument(document);
-			const [nextText, applied] = applyPatches(patches, text, options);
-			if (!applied.every(Boolean)) {
-				patchReport.recordFailure({
-					layerPath: layer,
-					patchPath,
-					targetPath: relative,
-					format: 'dmp',
-					code: 'context-mismatch',
-					message: '补丁上下文与当前文件不匹配',
-					detail: `${applied.filter(Boolean).length}/${applied.length} 个修改片段匹配成功`
-				});
-				core.Logger.warn(`跳过补丁（上下文不匹配）: ${patchPath}`);
-				continue;
-			}
-			text = nextText;
-			patchReport.recordApplied({ layerPath: layer, patchPath, targetPath: relative, format: 'dmp' });
-		} catch (error) {
+		}
+		if (!applied) {
 			patchReport.recordFailure({
 				layerPath: layer,
-				patchPath,
+				patchPath: candidates.map(candidate => candidate.path).join(', '),
 				targetPath: relative,
-				format: 'unknown',
-				code: 'apply-error',
-				message: '读取、解析或应用补丁时发生错误',
-				detail: error?.message || String(error)
+				format: 'candidates',
+				code: 'no-applicable-candidate',
+				message: '没有可应用的补丁候选',
+				detail: failures.join('; ')
 			});
-			core.Logger.warn(`应用补丁失败: ${patchPath}`, error);
+			core.Logger.warn(`没有可应用的补丁候选: ${candidates.map(candidate => candidate.path).join(', ')} (${failures.join('; ')})`);
 		}
 	}
 
@@ -321,7 +353,7 @@ function buildPatchedResource(relative) {
 function resolvePatchedResourcePath(relative) {
 	// IPC 接口会在运行时初始化前完成注册；此时尚无已扫描的资源层，
 	// 交由调用方按普通优先级路径回退，避免在管理器窗口中提前读取时崩溃。
-	if (!core || !relative || !getPatchPath(relative)) return null;
+	if (!core || !relative || !isPatchableResource(relative)) return null;
 	let patched = PATCHED_FS_CACHE.get(relative);
 	if (patched === undefined) {
 		const text = buildPatchedResource(relative);
