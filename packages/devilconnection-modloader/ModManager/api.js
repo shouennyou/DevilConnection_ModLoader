@@ -33,6 +33,8 @@ const {
 	extractSavesFlat,
 } = require('./core');
 
+const DOWNLOAD_TEMP_DIR = 'downloads';
+
 /**
  * 规范化备份文件名. 备份仅允许位于 backups 根目录中的单层 ZIP 文件.
  * @param {unknown} value
@@ -106,6 +108,7 @@ const ModManagerApi = {
 		if (!originalFs.existsSync(cacheDir)) {
 			originalFs.mkdirSync(cacheDir, { recursive: true });
 		}
+		this.cleanupDownloadTempDir();
 		this.ensureModOrder();
 		try {
 			this.refreshModCaches();
@@ -160,6 +163,29 @@ const ModManagerApi = {
 	/** 返回模组缓存目录和缓存文件路径. */
 	getCacheDirPath() {
 		return path.join(this.dataPath, CACHE_DIR);
+	},
+
+	/** 下载临时文件专用目录；绝不放在 mods 下，以免被扫描为模组。 */
+	getDownloadTempDirPath() {
+		return path.join(this.getCacheDirPath(), DOWNLOAD_TEMP_DIR);
+	},
+
+	/**
+	 * 每次启动清理上次异常中断留下的下载文件。
+	 * 仅处理 cache/downloads，不影响模组、元数据、工坊或补丁缓存。
+	 */
+	cleanupDownloadTempDir() {
+		const downloadTempDir = this.getDownloadTempDirPath();
+		try {
+			if (originalFs.existsSync(downloadTempDir)) {
+				originalFs.rmSync(downloadTempDir, { recursive: true, force: true });
+			}
+			originalFs.mkdirSync(downloadTempDir, { recursive: true });
+			return true;
+		} catch (error) {
+			Logger.error(`清理下载临时目录失败: ${downloadTempDir}`, error);
+			return false;
+		}
 	},
 
 	getModInfoCachePath() {
@@ -1531,8 +1557,17 @@ const ModManagerApi = {
 
 				const total = parseInt(res.headers['content-length'], 10) || 0;
 				let received = 0;
-				tmpPath = targetPath + `.tmp.${Date.now()}.asar`;
-				writeStream = originalFs.createWriteStream(tmpPath);
+				try {
+					const downloadTempDir = this.getDownloadTempDirPath();
+					originalFs.mkdirSync(downloadTempDir, { recursive: true });
+					tmpPath = path.join(downloadTempDir, `${randomUUID()}.part`);
+					writeStream = originalFs.createWriteStream(tmpPath);
+				} catch (error) {
+					Logger.error('创建下载临时文件失败', error);
+					res.resume();
+					fail(error.message);
+					return;
+				}
 
 				res.on('data', (chunk) => {
 					received += chunk.length;
