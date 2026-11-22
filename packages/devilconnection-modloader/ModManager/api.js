@@ -1824,6 +1824,8 @@ const ModManagerApi = {
 	 * 恢复备份.
 	 * 先将新存档完整写入临时目录并验证, 成功后通过目录切换提交.
 	 * 切换后任一步失败都会恢复原存档目录.
+	 * 若并发进程在切换窗口重建目标目录导致回滚失败, 保留 previous 临时目录，
+	 * 由返回消息提供恢复路径，绝不删除唯一的旧存档。
 	 * 自动跳过 steam_autocloud.vdf, 防止与 Steam 云存档冲突.
 	 * @param {string} file
 	 * @returns {{ success: boolean, count?: number, message?: string }}
@@ -1849,6 +1851,7 @@ const ModManagerApi = {
 		const previousStorageDir = path.join(stagingDir, 'previous');
 		let storageWasMoved = false;
 		let newStorageActivated = false;
+		let preserveStagingDir = false;
 		try {
 			// 先解压并验证备份, 此阶段不会修改当前存档.
 			extractSavesFlat(zipPath, restoredSavesDir);
@@ -1903,15 +1906,28 @@ const ModManagerApi = {
 					Logger.error('恢复原存档目录失败', restoreError);
 				}
 			}
+			// 若目标目录在切换窗口被外部进程重建，previous -> storage 的回滚会因
+			// ENOTEMPTY/EEXIST 失败。previous 是此时唯一的旧存档，绝不能被 finally
+			// 当作普通临时文件递归删除；保留整个事务目录以供用户恢复。
+			const previousStoragePreserved = storageWasMoved && originalFs.existsSync(previousStorageDir);
+			if (previousStoragePreserved) {
+				preserveStagingDir = true;
+				Logger.error(`恢复未完成，已保留原存档恢复目录: ${previousStorageDir}`);
+			}
 			Logger.error('恢复备份失败', error);
+			const recoveryDetail = previousStoragePreserved
+				? `; 原存档已保留在恢复目录: ${previousStorageDir}`
+				: '';
 			return {
 				success: false,
 				message: rollbackError
-					? `${error.message}; 原存档回滚失败: ${rollbackError.message}`
-					: error.message
+					? `${error.message}; 原存档回滚失败: ${rollbackError.message}${recoveryDetail}`
+					: `${error.message}${recoveryDetail}`
 			};
 		} finally {
-			if (originalFs.existsSync(stagingDir)) {
+			if (preserveStagingDir) {
+				Logger.warn(`恢复失败，未清理临时目录以保留原存档: ${stagingDir}`);
+			} else if (originalFs.existsSync(stagingDir)) {
 				try {
 					originalFs.rmSync(stagingDir, { recursive: true, force: true });
 				} catch (cleanupError) {
