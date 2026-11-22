@@ -58,6 +58,36 @@ function normalizeBackupFileName(value, options = {}) {
 	return fileName.toLowerCase().endsWith('.zip') ? fileName : null;
 }
 
+/**
+ * 验证下载到临时文件的模组归档，替换现有模组前必须完成此检查。
+ * HTTP 200 不能证明响应实际是 ASAR；例如反向代理的错误页面也可能返回 200。
+ * @param {string} archivePath
+ * @returns {object} 已解析的模组元数据。
+ * @throws {Error} 归档不可读取或模组元数据无效时抛出。
+ */
+function validateDownloadedModArchive(archivePath) {
+	const entries = AsarReader.listFilesSync(archivePath);
+	if (!Array.isArray(entries) || entries.length === 0) {
+		throw new Error('下载内容不是有效的 ASAR 模组归档');
+	}
+
+	const hasManifest = entries.some(entry =>
+		typeof entry === 'string'
+		&& entry.replace(/\\/g, '/').replace(/^\/+/, '') === 'modloader.mod.json'
+	);
+	if (!hasManifest) {
+		throw new Error('下载的 ASAR 缺少 modloader.mod.json');
+	}
+
+	const rawManifest = AsarReader.readAsarFileSync(archivePath, 'modloader.mod.json');
+	const manifestText = Buffer.isBuffer(rawManifest) ? rawManifest.toString('utf-8') : rawManifest;
+	const manifest = JSON.parse(manifestText);
+	if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+		throw new Error('modloader.mod.json 必须是对象');
+	}
+	return manifest;
+}
+
 const ModManagerApi = {
 	resourcesPath: Env.getResourcesPath(),
 	dataPath: Env.getDataPath(),
@@ -1519,7 +1549,9 @@ const ModManagerApi = {
 						return;
 					}
 					try {
+						validateDownloadedModArchive(tmpPath);
 						originalFs.renameSync(tmpPath, targetPath);
+						tmpPath = '';
 						if (targetPath.toLowerCase().endsWith('.asar')) {
 							AsarReader.uncacheAsar(targetPath);
 						}
