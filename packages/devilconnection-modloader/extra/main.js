@@ -446,17 +446,29 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return typeof steam.isSteamConfigured === 'function' ? steam.isSteamConfigured() : true;
 	});
 
-	// GetStatus: 查询 Steam 运行时状态, 返回 Promise<{configured, active}>.
+	// GetStatus: 查询 Steam 运行时状态, 返回 Promise<{configured, active, supported, reason?}>.
 	// 配置字段 configured 表示是否启用 Steam 模式, active 表示 Steam 通讯是否已成功连接.
 	ipcMain.handle('steamworks:getStatus', async () => {
+		const supported = typeof steam.isSteamSupported === 'function' ? steam.isSteamSupported() : true;
+		const reason = !supported && typeof steam.getSteamUnsupportedReason === 'function'
+			? steam.getSteamUnsupportedReason()
+			: null;
 		return {
-			configured: typeof steam.isSteamConfigured === 'function' ? steam.isSteamConfigured() : true,
-			active: typeof steam.isSteamActive === 'function' ? steam.isSteamActive() : false,
+			configured: supported && (typeof steam.isSteamConfigured === 'function' ? steam.isSteamConfigured() : true),
+			active: supported && (typeof steam.isSteamActive === 'function' ? steam.isSteamActive() : false),
+			supported,
+			...(reason ? { reason } : {}),
 		};
 	});
 
 	// SetEnabled: 输入 enabled. 切换 Steam 开关后退出程序, 返回 Promise<void>.
 	ipcMain.handle('steamworks:setEnabled', async (event, enabled) => {
+		const supported = typeof steam.isSteamSupported === 'function' ? steam.isSteamSupported() : true;
+		if (!supported) {
+			// 防止开发者工具或旧前端绕过禁用开关重新写入 steam: true。
+			if (typeof steam.setSteamConfigured === 'function') steam.setSteamConfigured(false);
+			return;
+		}
 		if (typeof steam.setSteamConfigured === 'function') {
 			steam.setSteamConfigured(enabled === true);
 		}

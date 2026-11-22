@@ -441,7 +441,7 @@ const api_extra = {
 	getSteamEnabled: async () => {
 		return await ipcRenderer.invoke('steamworks:getEnabled');
 	},
-	/** 查询 Steam 运行时状态 { configured, active }(configured:模式是否开启;active:是否已连接) */
+	/** 查询 Steam 运行时状态 { configured, active, supported, reason? }。 */
 	getSteamStatus: async () => {
 		return await ipcRenderer.invoke('steamworks:getStatus');
 	},

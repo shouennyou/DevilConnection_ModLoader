@@ -1,4 +1,3 @@
-import { init } from 'steamworks.js';
 import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
@@ -15,6 +14,25 @@ const CONFIG_FILE = 'mod-manager.json';
 
 // Steam 通讯仅在启动时初始化一次. null 表示未启用.
 let client = null;
+
+/**
+ * steamworks.js 0.4.0 当前随包提供的原生模块平台矩阵。
+ * 不支持的平台绝不能在顶层加载 steamworks.js，否则 ESM 初始化阶段会直接终止主进程。
+ */
+export function isSteamSupported() {
+	return (process.platform === 'win32' && process.arch === 'x64')
+		|| (process.platform === 'linux' && process.arch === 'x64')
+		|| (process.platform === 'darwin' && (process.arch === 'x64' || process.arch === 'arm64'));
+}
+
+/** 返回当前运行时无法使用 Steam 功能的用户可见原因；支持时返回 null。 */
+export function getSteamUnsupportedReason() {
+	if (isSteamSupported()) return null;
+	if (process.platform === 'linux' && process.arch === 'arm64') {
+		return 'Linux ARM64 发行版暂不支持 Steam 功能，已自动关闭。';
+	}
+	return `当前平台（${process.platform}/${process.arch}）暂不支持 Steam 功能，已自动关闭。`;
+}
 
 function getResourcesPath() {
 	return path.normalize(process.resourcesPath || process.cwd());
@@ -52,9 +70,24 @@ function writeConfig(cfg) {
 	fs.writeFileSync(p, JSON.stringify(cfg || {}, null, 2), 'utf-8');
 }
 
-/** Steam 是否启用. 仅明确设置 steam: false 时关闭. */
+/**
+ * 在不受支持的平台将旧配置或默认配置持久化修正为 steam: false。
+ * 写入失败不能妨碍程序作为非 Steam 版本启动。
+ */
+function forceDisableUnsupportedSteam() {
+	if (isSteamSupported()) return;
+	const config = readConfig();
+	if (config.steam === false) return;
+	try {
+		writeConfig({ ...config, steam: false });
+	} catch (error) {
+		console.error('[Steam] 写入不受支持平台的禁用配置失败:', error);
+	}
+}
+
+/** Steam 是否启用. 不受支持的平台始终视为关闭。 */
 export function isSteamConfigured() {
-	return readConfig().steam !== false;
+	return isSteamSupported() && readConfig().steam !== false;
 }
 
 /** Steam 通讯是否处于活动状态. */
@@ -72,8 +105,15 @@ export function getSteamClient() {
  * @returns 已启用且成功时返回客户端, 否则返回 null.
  */
 export function initSteam() {
+	if (!isSteamSupported()) {
+		forceDisableUnsupportedSteam();
+		client = null;
+		return null;
+	}
 	if (!isSteamConfigured()) return null;
 	try {
+		// 仅在已确认平台支持时加载原生模块，避免 Linux ARM64 在启动阶段崩溃。
+		const { init } = require('steamworks.js');
 		client = init(APP_ID);
 		return client;
 	} catch (error) {
@@ -90,5 +130,7 @@ export function initSteam() {
  * @param {boolean} enabled
  */
 export function setSteamConfigured(enabled) {
-	writeConfig({ ...readConfig(), steam: enabled === true });
+	const configured = isSteamSupported() && enabled === true;
+	writeConfig({ ...readConfig(), steam: configured });
+	return configured;
 }

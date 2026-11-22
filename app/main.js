@@ -27,6 +27,8 @@ try {
 		mainExtra.registerIPCHandlers(ipcMain, {
 			isSteamConfigured,
 			isSteamActive,
+			isSteamSupported,
+			getSteamUnsupportedReason,
 			setSteamConfigured
 		});
 	}
@@ -70,6 +72,8 @@ import {
 	getSteamClient,
 	isSteamActive,
 	isSteamConfigured,
+	isSteamSupported,
+	getSteamUnsupportedReason,
 	setSteamConfigured
 } from './steam.js';
 
