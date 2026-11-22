@@ -163,9 +163,9 @@ const modManagerAPI = {
 	},
 
 	/** 下载新版本 asar 并原地替换,返回 Promise<{success, message?}> */
-	downloadAndReplace: (url, fileName) => {
+	downloadAndReplace: (url, fileName, sha256) => {
 		// 用 ipcRenderer.send 触发异步下载,不阻塞主线程
-		ipcRenderer.send('modmanager:downloadAndReplace', { url, fileName });
+		ipcRenderer.send('modmanager:downloadAndReplace', { url, fileName, sha256 });
 		// 实际结果通过 onDownloadProgress 回调中的 result 事件传回
 		return new Promise((resolve) => {
 			// 注册一次性监听,等主进程推送最终结果

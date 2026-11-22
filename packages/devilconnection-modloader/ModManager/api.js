@@ -7,7 +7,7 @@
  */
 
 const path = require('path');
-const { randomUUID } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 const AsarReader = require('../utils/AsarReader');
 const { ModLoaderApi, resolveResourcePath } = require('../ModLoader/api');
 const {
@@ -34,6 +34,7 @@ const {
 } = require('./core');
 
 const DOWNLOAD_TEMP_DIR = 'downloads';
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
 /**
  * 规范化备份文件名. 备份仅允许位于 backups 根目录中的单层 ZIP 文件.
@@ -88,6 +89,24 @@ function validateDownloadedModArchive(archivePath) {
 		throw new Error('modloader.mod.json 必须是对象');
 	}
 	return manifest;
+}
+
+/** 返回规范化的 SHA-256 十六进制摘要，格式无效时返回 null。 */
+function normalizeSha256(value) {
+	if (typeof value !== 'string') return null;
+	const normalized = value.trim().toLowerCase();
+	return SHA256_PATTERN.test(normalized) ? normalized : null;
+}
+
+/** 使用流计算归档哈希，避免将大型模组完整读入内存。 */
+function calculateFileSha256(filePath) {
+	return new Promise((resolve, reject) => {
+		const hash = createHash('sha256');
+		const stream = originalFs.createReadStream(filePath);
+		stream.on('data', chunk => hash.update(chunk));
+		stream.once('error', reject);
+		stream.once('end', () => resolve(hash.digest('hex')));
+	});
 }
 
 const ModManagerApi = {
@@ -1463,13 +1482,18 @@ const ModManagerApi = {
 	 * @param {string} url ASAR 下载地址.
 	 * @param {string} fileName mods 下的文件名.
 	 * @param {Function|null} onProgress 下载进度回调.
+	 * @param {string|undefined} [sha256] update.json 提供的可选 SHA-256.
 	 * @param {number} [redirectCount] 已跟随的重定向次数.
 	 * @returns {Promise<{success: boolean, message?: string}>}
 	 */
-	async downloadAndReplace(url, fileName, onProgress, redirectCount = 0) {
+	async downloadAndReplace(url, fileName, onProgress, sha256, redirectCount = 0) {
 		const { net } = require('electron');
 		if (!this.isPluginEntryName(fileName)) {
 			return { success: false, message: '无效的目标文件名' };
+		}
+		const expectedSha256 = sha256 === undefined ? null : normalizeSha256(sha256);
+		if (sha256 !== undefined && !expectedSha256) {
+			return { success: false, message: '无效的 SHA-256 校验值' };
 		}
 		const targetPath = path.join(Env.getPluginDir(), fileName);
 
@@ -1540,7 +1564,7 @@ const ModManagerApi = {
 				}
 				try {
 					const next = new URL(redirectUrl, target).toString();
-					done(this.downloadAndReplace(next, fileName, onProgress, redirectCount + 1));
+					done(this.downloadAndReplace(next, fileName, onProgress, expectedSha256 ?? undefined, redirectCount + 1));
 				} catch (error) {
 					Logger.error(`解析下载重定向地址失败: ${redirectUrl}`, error);
 					fail('无效的重定向 URL');
@@ -1578,12 +1602,19 @@ const ModManagerApi = {
 					fail(err.message);
 				});
 
-				writeStream.on('finish', () => {
+				writeStream.on('finish', async () => {
 					if (settled) {
 						removeTemp();
 						return;
 					}
 					try {
+						if (expectedSha256) {
+							const actualSha256 = await calculateFileSha256(tmpPath);
+							if (settled) return;
+							if (actualSha256 !== expectedSha256) {
+								throw new Error('下载文件的 SHA-256 校验失败');
+							}
+						}
 						validateDownloadedModArchive(tmpPath);
 						originalFs.renameSync(tmpPath, targetPath);
 						tmpPath = '';

@@ -250,11 +250,11 @@ function registerIPCHandlers(ipcMain, deps = {}) {
 		return ModManagerApi.importLocalModFile(sourcePath || '');
 	});
 
-	// DownloadAndReplace: 输入 {url, fileName}. 下载新版 ASAR 并原地替换, 最终结果通过 modmanager:download-progress 的 result 字段返回 {success, message?}.
-	ipcMain.on('modmanager:downloadAndReplace', async (event, { url, fileName }) => {
+	// DownloadAndReplace: 输入 {url, fileName, sha256?}. 下载新版 ASAR 并原地替换, 最终结果通过 modmanager:download-progress 的 result 字段返回 {success, message?}.
+	ipcMain.on('modmanager:downloadAndReplace', async (event, { url, fileName, sha256 } = {}) => {
 		const result = await ModManagerApi.downloadAndReplace(url, fileName, (received, total) => {
 			event.sender.send('modmanager:download-progress', { fileName, received, total });
-		});
+		}, sha256);
 		if (result.success) ModManagerApi.refreshModCaches();
 		event.sender.send('modmanager:download-progress', { fileName, received: -1, total: 0, result });
 	});
