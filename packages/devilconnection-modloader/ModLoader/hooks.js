@@ -31,6 +31,16 @@ let patchCacheIndex = null;
 let schemeRegistered = false;
 
 /**
+ * 已启用模组或排序发生变化后，丢弃基于旧资源层生成的内存补丁结果。
+ * 磁盘缓存文件按内容哈希命名，可保留复用；索引将在下一次写入时由当前会话重建。
+ */
+function invalidateResourceCaches() {
+	PATCHED_RESOURCE_CACHE.clear();
+	PATCHED_FS_CACHE.clear();
+	patchCacheIndex = { version: 1, resources: {} };
+}
+
+/**
  * 必须在 app ready 前调用；即使当前使用 file-cache 模式也可安全预注册。
  */
 function registerProtocolScheme() {
@@ -517,7 +527,7 @@ function setupMemoryProtocol(protocol, net) {
 function setupProtocol() {
 	const { app, protocol, net } = electron;
 	const register = () => {
-		PATCHED_RESOURCE_CACHE.clear();
+		invalidateResourceCaches();
 		if (getResourceProtocolMode() === MEMORY_PROTOCOL_MODE) setupMemoryProtocol(protocol, net);
 		else setupFileCacheProtocol(protocol);
 	};
@@ -535,6 +545,7 @@ module.exports = {
 	applyFSHooks,
 	setupProtocol,
 	registerProtocolScheme,
+	invalidateResourceCaches,
 	getResourceProtocolMode,
 	resolvePatchedResourcePath
 };

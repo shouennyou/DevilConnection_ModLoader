@@ -14,7 +14,6 @@ injection.init(core);
 patchReport.init(core);
 
 let runtimeInitialized = false;
-let injectionEnabled = false;
 
 function injectIntoTargetWindow(targetWindow) {
 	if (!targetWindow || targetWindow.isDestroyed()) return;
@@ -29,12 +28,10 @@ function injectIntoTargetWindow(targetWindow) {
 }
 
 /**
- * 初始化文件拦截与脚本注入运行时.
- * 未配置有效游戏核心时返回 false, 调用方据此阻止游戏窗口启动.
+ * 读取当前模组配置并刷新与资源层相关的会话状态。
+ * 每次创建游戏窗口都必须调用，以使模组开关、优先级和注入脚本立即生效。
  */
-function initializeRuntime() {
-	if (runtimeInitialized) return injectionEnabled;
-
+function refreshGameSession() {
 	try {
 		core.PluginManager.init();
 		if (!core.PluginManager.gameCorePath) {
@@ -42,17 +39,33 @@ function initializeRuntime() {
 			return false;
 		}
 
-		hooks.applyFSHooks();
+		hooks.invalidateResourceCaches();
 
 		if (core.Env.isMain) {
-			hooks.setupProtocol();
 			injection.scanHooks();
-			injectionEnabled = true;
 		}
-		runtimeInitialized = true;
-		return injectionEnabled;
+		return true;
 	} catch (error) {
-		core.Logger.error('主程序启动失败', error);
+		core.Logger.error('刷新游戏会话失败', error);
+		return false;
+	}
+}
+
+/**
+ * 初始化仅可注册一次的 fs/protocol Hook。
+ * 后续游戏启动只刷新资源层，避免重复拦截 Electron protocol。
+ */
+function initializeRuntime() {
+	if (runtimeInitialized) return refreshGameSession();
+	if (!refreshGameSession()) return false;
+
+	try {
+		hooks.applyFSHooks();
+		if (core.Env.isMain) hooks.setupProtocol();
+		runtimeInitialized = true;
+		return true;
+	} catch (error) {
+		core.Logger.error('主程序初始化失败', error);
 		return false;
 	}
 }
